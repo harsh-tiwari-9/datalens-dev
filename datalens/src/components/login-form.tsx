@@ -85,14 +85,48 @@ export function LoginForm({
     setSubmitting(true)
 
     try {
-      // Step 1: loginWithOTP (request OTP or login depending on backend behavior)
+      const digitsOnly = phoneNumber.replace(/\D/g, "")
+
+      if (otpRequested && otp.trim().length > 0) {
+        // Step 2: validate OTP
+        const res = await auth.request("/jviz/authentication/validateOTP", {
+          method: "POST",
+          body: { mobileNumber: digitsOnly, otp: otp.trim() },
+          service: "auth",
+        })
+
+        // Try to extract token from response if present
+        let token: string | null = null
+        if (res && typeof res === "object") {
+          const candidates = [
+            (res as any).token,
+            (res as any).accessToken,
+            (res as any).jwt,
+            (res as any).authToken,
+          ]
+          token = (candidates.find(Boolean) as string) || null
+        }
+
+        if (token) {
+          localStorage.setItem("token", token)
+          toast.success("Logged in successfully")
+          router.replace("/xyz")
+          return
+        }
+
+        toast.success("OTP verified")
+        router.replace("/xyz")
+        return
+      }
+
+      // Step 1: request OTP
       const res = await auth.request("/jviz/authentication/loginWithOTP", {
         method: "POST",
-        body: { mobileNumber: phoneNumber.replace(/\D/g, "") },
+        body: { mobileNumber: digitsOnly },
         service: "auth",
       })
 
-      // Try to extract token from response if present
+      // Attempt token capture if backend returns it immediately
       let token: string | null = null
       if (res && typeof res === "object") {
         const candidates = [
@@ -104,8 +138,6 @@ export function LoginForm({
         token = (candidates.find(Boolean) as string) || null
       }
 
-      // If OTP flow requires a second step, you'd call it here using `otp`
-      // For now, if token exists, store and proceed
       if (token) {
         localStorage.setItem("token", token)
         toast.success("Logged in successfully")
@@ -113,8 +145,6 @@ export function LoginForm({
         return
       }
 
-      // If no token returned, assume OTP step is pending
-      // Show a friendly message for now
       setOtpRequested(true)
       toast.info("OTP sent. Please enter the OTP to continue.")
       setError("OTP sent. Please enter the OTP to continue.")
@@ -146,8 +176,12 @@ export function LoginForm({
           </div>
           <Input id="password" type="password" placeholder="Enter your OTP" value={otp} onChange={(e) => setOtp(e.target.value)} />
         </div>
-        <Button type="submit" className="w-full" disabled={submitting}>
-          Login
+        <Button
+          type="submit"
+          className="w-full"
+          disabled={submitting || (otpRequested && otp.trim().length === 0)}
+        >
+          {otpRequested ? "Verify OTP" : "Get OTP"}
         </Button>
       </div>
     </form>
