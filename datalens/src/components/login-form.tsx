@@ -58,7 +58,7 @@ export function LoginForm({
         if (token) {
           localStorage.setItem("token", token)
           toast.success("Logged in successfully")
-          router.replace("/xyz")
+          router.replace("/home")
           return
         }
 
@@ -95,27 +95,29 @@ export function LoginForm({
           service: "auth",
         })
 
-        // Try to extract token from response if present
-        let token: string | null = null
-        if (res && typeof res === "object") {
-          const candidates = [
-            (res as any).token,
-            (res as any).accessToken,
-            (res as any).jwt,
-            (res as any).authToken,
-          ]
-          token = (candidates.find(Boolean) as string) || null
-        }
+        // Persist tokens from response shape provided
+        const data: any = (res as any)?.data
+        const accessToken: string | null = data?.accessToken || null
+        const tokenType: string | null = data?.tokenType || null
+        const tkf: string | null = data?.tkf || null
+        const xpr: number | null = data?.xpr ?? null
 
-        if (token) {
-          localStorage.setItem("token", token)
+        if (accessToken) {
+          localStorage.setItem("token", accessToken)
+          if (tokenType) localStorage.setItem("tokenType", tokenType)
+          if (tkf) localStorage.setItem("tkf", tkf)
+          if (xpr !== null) {
+            const expiresAt = Date.now() + Number(xpr) * 1000
+            localStorage.setItem("xpr", String(xpr))
+            localStorage.setItem("tokenExpiresAt", String(expiresAt))
+          }
           toast.success("Logged in successfully")
-          router.replace("/xyz")
+          router.replace("/home")
           return
         }
 
         toast.success("OTP verified")
-        router.replace("/xyz")
+        router.replace("/home")
         return
       }
 
@@ -141,7 +143,7 @@ export function LoginForm({
       if (token) {
         localStorage.setItem("token", token)
         toast.success("Logged in successfully")
-        router.replace("/xyz")
+        router.replace("/home")
         return
       }
 
@@ -179,9 +181,13 @@ export function LoginForm({
         <Button
           type="submit"
           className="w-full"
-          disabled={submitting || (otpRequested && otp.trim().length === 0)}
+          disabled={
+            submitting || !(
+              phoneNumber.replace(/\D/g, "").length === 10 && otp.trim().length > 0
+            )
+          }
         >
-          {otpRequested ? "Verify OTP" : "Get OTP"}
+          {"Login"}
         </Button>
       </div>
     </form>

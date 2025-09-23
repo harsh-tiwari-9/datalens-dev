@@ -1,6 +1,6 @@
 "use client"
 
-import { useEffect } from "react"
+import { useEffect, useState } from "react"
 import { useRouter } from "next/navigation"
 import { GalleryVerticalEnd } from "lucide-react"
 
@@ -8,17 +8,24 @@ import { LoginForm } from "@/components/login-form"
 
 export default function LoginPage() {
   const router = useRouter()
+  const [checked, setChecked] = useState(false)
+  const [hasToken, setHasToken] = useState(false)
 
   useEffect(() => {
     try {
       const token = localStorage.getItem("token")
       if (token) {
-        router.replace("/xyz")
+        setHasToken(true)
+        router.replace("/home")
       }
     } catch {
       // ignore access errors
     }
+    setChecked(true)
   }, [router])
+
+  // Wait for client check; don't render login if authenticated
+  if (!checked || hasToken) return null
 
   return (
     <div className="grid min-h-svh lg:grid-cols-2">
