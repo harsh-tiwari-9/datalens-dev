@@ -18,7 +18,9 @@ import {
   CheckSquare,
   Square,
   Calendar as CalendarIcon,
-  X
+  X,
+  ChevronDown,
+  ChevronUp
 } from "lucide-react"
 import {
   DropdownMenu,
@@ -69,12 +71,20 @@ export default function ChartsPage() {
   })
   const [fromDate, setFromDate] = useState<string>("")
   const [toDate, setToDate] = useState<string>("")
-  
+  const [isFiltersExpanded, setIsFiltersExpanded] = useState(false)
+
   const onboardingApi = useOnboardingApi()
 
   useEffect(() => {
     fetchCharts()
   }, [])
+
+  // Auto-expand filters when any filter is applied
+  useEffect(() => {
+    if (getAppliedFilters().length > 0) {
+      setIsFiltersExpanded(true)
+    }
+  }, [searchTerm, filters.chartType, fromDate, toDate])
 
   const fetchCharts = async () => {
     try {
@@ -162,7 +172,12 @@ export default function ChartsPage() {
   const getAppliedFilters = () => {
     const applied = []
     if (searchTerm) applied.push({ type: 'search', label: `"${searchTerm}"`, value: searchTerm })
-    if (filters.chartType.length > 0) applied.push({ type: 'chartType', label: `Types: ${filters.chartType.join(", ")}`, value: filters.chartType })
+    
+    // Add each chart type separately
+    filters.chartType.forEach((type) => {
+      applied.push({ type: 'chartType', label: type.charAt(0).toUpperCase() + type.slice(1), value: type })
+    })
+    
     if (dateRange?.from || dateRange?.to) {
       const from = dateRange.from ? format(dateRange.from, "MMM dd, yyyy") : "Start"
       const to = dateRange.to ? format(dateRange.to, "MMM dd, yyyy") : "End"
@@ -173,13 +188,20 @@ export default function ChartsPage() {
     return applied
   }
 
-  const removeFilter = (filterType: string) => {
+  const removeFilter = (filterType: string, value?: any) => {
     switch (filterType) {
       case 'search':
         setSearchTerm("")
         break
       case 'chartType':
-        setFilters(prev => ({ ...prev, chartType: [] }))
+        if (value) {
+          setFilters(prev => ({ 
+            ...prev, 
+            chartType: prev.chartType.filter(type => type !== value) 
+          }))
+        } else {
+          setFilters(prev => ({ ...prev, chartType: [] }))
+        }
         break
       case 'dateRange':
         setDateRange(undefined)
@@ -276,44 +298,95 @@ export default function ChartsPage() {
 
         {/* Search and Filters */}
         <Card className="mb-6 border-0 shadow-sm bg-gradient-to-r from-slate-50 to-slate-100 dark:from-slate-800 dark:to-slate-900">
-          <CardContent className="p-6">
-            <div className="space-y-6">
-              {/* Applied Filters */}
+          {/* Filter Header */}
+          <div 
+            className="flex items-center justify-between p-6 cursor-pointer hover:bg-slate-100/50 dark:hover:bg-slate-700/50 transition-colors"
+            onClick={() => setIsFiltersExpanded(!isFiltersExpanded)}
+          >
+            <div className="flex items-center gap-3">
+              <Filter className="size-5 text-slate-600 dark:text-slate-400" />
+              <div>
+                <h3 className="text-lg font-semibold text-slate-900 dark:text-slate-100">
+                  Filters
+                </h3>
+                {getAppliedFilters().length > 0 && (
+                  <p className="text-sm text-slate-500 dark:text-slate-400">
+                    {getAppliedFilters().length} filter{getAppliedFilters().length !== 1 ? 's' : ''} applied
+                  </p>
+                )}
+              </div>
+            </div>
+            <div className="flex items-center gap-3">
               {getAppliedFilters().length > 0 && (
                 <div className="flex flex-wrap items-center gap-2">
-                  <span className="text-sm font-medium text-slate-500 dark:text-slate-400">Active filters:</span>
                   {getAppliedFilters().map((filter, index) => (
                     <div
                       key={index}
                       className="inline-flex items-center gap-1 px-3 py-1.5 bg-slate-200/60 dark:bg-slate-700/60 text-slate-700 dark:text-slate-300 rounded-full text-xs font-medium hover:bg-slate-300/60 dark:hover:bg-slate-600/60 transition-colors"
+                      onClick={(e) => e.stopPropagation()}
                     >
                       <span>{filter.label}</span>
                       <button
-                        onClick={() => removeFilter(filter.type)}
+                        onClick={() => removeFilter(filter.type, filter.value)}
                         className="ml-1 hover:bg-slate-400/20 dark:hover:bg-slate-500/20 rounded-full p-0.5 transition-colors"
                       >
                         <X className="size-3" />
                       </button>
                     </div>
                   ))}
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={(e) => {
+                      e.stopPropagation()
+                      setSearchTerm("")
+                      setFilters({ type: "all", chartType: [], dateRange: "all" })
+                      setDateRange(undefined)
+                      setFromDate("")
+                      setToDate("")
+                      setIsFiltersExpanded(false)
+                    }}
+                    className="h-7 text-xs border-slate-300 dark:border-slate-600 hover:bg-slate-100 dark:hover:bg-slate-700"
+                  >
+                    Clear All
+                  </Button>
                 </div>
               )}
-
-              {/* Main Filter Row */}
+              <div className="flex items-center gap-2">
+                {isFiltersExpanded ? (
+                  <ChevronUp className="size-5 text-slate-500 dark:text-slate-400" />
+                ) : (
+                  <ChevronDown className="size-5 text-slate-500 dark:text-slate-400" />
+                )}
+              </div>
+            </div>
+          </div>
+          
+          {/* Filter Content */}
+          {isFiltersExpanded && (
+            <div className="px-6 pb-6">
               <div className="flex flex-col lg:flex-row gap-4">
                 {/* Search Bar */}
                 <div className="relative flex-1">
-                  <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-slate-400 size-4" />
-                  <Input
-                    placeholder="Search by chart name..."
-                    value={searchTerm}
-                    onChange={(e) => setSearchTerm(e.target.value)}
-                    className="pl-10 h-11 border-slate-200 dark:border-slate-700 focus:ring-2 focus:ring-indigo-500/20"
-                  />
+                  <label className="text-sm font-medium text-slate-700 dark:text-slate-300 mb-2 block">
+                    Search
+                  </label>
+                  <div className="relative">
+                    <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-slate-400 size-4" />
+                    <Input
+                      placeholder="Search by chart name..."
+                      value={searchTerm}
+                      onChange={(e) => setSearchTerm(e.target.value)}
+                      className="pl-10 h-11 border-slate-200 dark:border-slate-700 focus:ring-2 focus:ring-indigo-500/20"
+                    />
+                  </div>
                 </div>
 
-                {/* Chart Type Dropdown */}
+                {/* Chart Type Filter */}
                 <div className="min-w-[200px]">
+                  <label className="text-sm font-medium text-slate-700 dark:text-slate-300 mb-2 block">
+                    Chart Type
+                  </label>
                   <Select 
                     value={filters.chartType.length > 0 ? filters.chartType[0] : "all"} 
                     onValueChange={(value) => {
@@ -343,89 +416,34 @@ export default function ChartsPage() {
                   </Select>
                 </div>
 
-                {/* Date Range Picker */}
-                <div className="min-w-[250px]">
-                  <Popover>
-                    <PopoverTrigger asChild>
-                      <Button
-                        variant="outline"
-                        className="w-full h-11 justify-start text-left font-normal border-slate-200 dark:border-slate-700 focus:ring-2 focus:ring-indigo-500/20"
-                      >
-                        <CalendarIcon className="mr-2 h-4 w-4" />
-                        {dateRange?.from ? (
-                          dateRange.to ? (
-                            <>
-                              {format(dateRange.from, "MMM dd")} - {format(dateRange.to, "MMM dd")}
-                            </>
-                          ) : (
-                            format(dateRange.from, "MMM dd, yyyy")
-                          )
-                        ) : (
-                          <span>Pick date range</span>
-                        )}
-                      </Button>
-                    </PopoverTrigger>
-                    <PopoverContent className="w-auto p-0" align="start">
-                      <Calendar
-                        initialFocus
-                        mode="range"
-                        defaultMonth={dateRange?.from}
-                        selected={dateRange}
-                        onSelect={setDateRange}
-                        numberOfMonths={1}
-                        showOutsideDays={false}
-                        fixedWeeks
-                      />
-                    </PopoverContent>
-                  </Popover>
-                </div>
-
-                {/* Clear Filters */}
-                <Button
-                  variant="outline"
-                  onClick={() => {
-                    setSearchTerm("")
-                    setFilters({ type: "all", chartType: [], dateRange: "all" })
-                    setDateRange(undefined)
-                    setFromDate("")
-                    setToDate("")
-                  }}
-                  className="h-11 border-slate-200 dark:border-slate-700 hover:bg-slate-50 dark:hover:bg-slate-800"
-                >
-                  Clear All
-                </Button>
-              </div>
-
-              {/* Secondary Filter Row */}
-              <div className="flex flex-col sm:flex-row gap-4">
                 {/* From Date */}
                 <div className="flex-1">
-                  <label className="text-xs font-medium text-slate-600 dark:text-slate-400 mb-1 block">
+                  <label className="text-sm font-medium text-slate-700 dark:text-slate-300 mb-2 block">
                     From Date
                   </label>
                   <Input
                     type="date"
                     value={fromDate}
                     onChange={(e) => setFromDate(e.target.value)}
-                    className="h-10 border-slate-200 dark:border-slate-700 focus:ring-2 focus:ring-indigo-500/20"
+                    className="h-11 border-slate-200 dark:border-slate-700 focus:ring-2 focus:ring-indigo-500/20"
                   />
                 </div>
 
                 {/* To Date */}
                 <div className="flex-1">
-                  <label className="text-xs font-medium text-slate-600 dark:text-slate-400 mb-1 block">
+                  <label className="text-sm font-medium text-slate-700 dark:text-slate-300 mb-2 block">
                     To Date
                   </label>
                   <Input
                     type="date"
                     value={toDate}
                     onChange={(e) => setToDate(e.target.value)}
-                    className="h-10 border-slate-200 dark:border-slate-700 focus:ring-2 focus:ring-indigo-500/20"
+                    className="h-11 border-slate-200 dark:border-slate-700 focus:ring-2 focus:ring-indigo-500/20"
                   />
                 </div>
               </div>
             </div>
-          </CardContent>
+          )}
         </Card>
 
         {/* Charts Table */}
