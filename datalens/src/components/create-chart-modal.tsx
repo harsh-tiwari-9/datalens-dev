@@ -40,219 +40,10 @@ import {
   Globe,
   Zap
 } from "lucide-react"
+import { CHART_TYPES, CATEGORIES, DATASETS, type ChartType } from "@/constants/chart-types"
 
-interface ChartType {
-  id: string
-  name: string
-  description: string
-  category: string
-  tags: string[]
-  deprecated?: boolean
-  icon: React.ReactNode
-  preview: React.ReactNode
-}
+// Chart types and constants are now imported from @/constants/chart-types
 
-const chartTypes: ChartType[] = [
-  {
-    id: "big-number-trend",
-    name: "Big Number with Trendline",
-    description: "Display a key metric with trend indicator",
-    category: "KPI",
-    tags: ["Popular", "KPI"],
-    icon: <TrendingUp className="size-4" />,
-    preview: (
-      <div className="p-3 bg-slate-50 dark:bg-slate-800 rounded">
-        <div className="text-2xl font-bold text-slate-900 dark:text-slate-100">215</div>
-        <div className="text-sm text-green-600 dark:text-green-400">+70% WoW</div>
-        <div className="w-16 h-8 bg-blue-500 rounded-sm mt-1"></div>
-      </div>
-    )
-  },
-  {
-    id: "big-number",
-    name: "Big Number",
-    description: "Display a single key metric",
-    category: "KPI",
-    tags: ["Popular", "KPI"],
-    icon: <Target className="size-4" />,
-    preview: (
-      <div className="p-3 bg-slate-50 dark:bg-slate-800 rounded">
-        <div className="text-2xl font-bold text-slate-900 dark:text-slate-100">80.7M</div>
-      </div>
-    )
-  },
-  {
-    id: "table",
-    name: "Table",
-    description: "Display data in tabular format",
-    category: "Table",
-    tags: ["Popular", "Table"],
-    icon: <Table className="size-4" />,
-    preview: (
-      <div className="p-2 bg-slate-50 dark:bg-slate-800 rounded text-xs">
-        <div className="grid grid-cols-3 gap-1">
-          <div className="p-1 bg-white dark:bg-slate-700 rounded">Name</div>
-          <div className="p-1 bg-white dark:bg-slate-700 rounded">Value</div>
-          <div className="p-1 bg-white dark:bg-slate-700 rounded">Status</div>
-        </div>
-      </div>
-    )
-  },
-  {
-    id: "pivot-table",
-    name: "Pivot Table",
-    description: "Interactive pivot table for data analysis",
-    category: "Table",
-    tags: ["Advanced-Analytics", "Table"],
-    icon: <Layers className="size-4" />,
-    preview: (
-      <div className="p-2 bg-slate-50 dark:bg-slate-800 rounded text-xs">
-        <div className="grid grid-cols-2 gap-1">
-          <div className="p-1 bg-white dark:bg-slate-700 rounded">Pivot</div>
-          <div className="p-1 bg-white dark:bg-slate-700 rounded">Data</div>
-        </div>
-      </div>
-    )
-  },
-  {
-    id: "line-chart",
-    name: "Line Chart",
-    description: "Show trends over time",
-    category: "Evolution",
-    tags: ["Popular", "Evolution"],
-    icon: <LineChart className="size-4" />,
-    preview: (
-      <div className="p-2 bg-slate-50 dark:bg-slate-800 rounded">
-        <div className="w-16 h-12 bg-gradient-to-r from-blue-500 to-purple-500 rounded"></div>
-      </div>
-    )
-  },
-  {
-    id: "area-chart",
-    name: "Area Chart",
-    description: "Show data trends with filled areas",
-    category: "Evolution",
-    tags: ["Popular", "Evolution"],
-    icon: <Activity className="size-4" />,
-    preview: (
-      <div className="p-2 bg-slate-50 dark:bg-slate-800 rounded">
-        <div className="w-16 h-12 bg-gradient-to-r from-green-500 to-blue-500 rounded"></div>
-      </div>
-    )
-  },
-  {
-    id: "bar-chart",
-    name: "Bar Chart",
-    description: "Compare values across categories",
-    category: "Ranking",
-    tags: ["Popular", "Ranking"],
-    icon: <BarChart3 className="size-4" />,
-    preview: (
-      <div className="p-2 bg-slate-50 dark:bg-slate-800 rounded">
-        <div className="flex items-end gap-1 h-12">
-          <div className="w-3 bg-yellow-500 rounded-t"></div>
-          <div className="w-3 bg-green-500 rounded-t h-8"></div>
-          <div className="w-3 bg-yellow-500 rounded-t h-6"></div>
-        </div>
-      </div>
-    )
-  },
-//   {
-//     id: "scatter-plot",
-//     name: "Scatter Plot",
-//     description: "Show relationship between two variables",
-//     category: "Correlation",
-//     tags: ["Advanced-Analytics", "Correlation"],
-//     icon: <Scatter3D className="size-4" />,
-//     preview: (
-//       <div className="p-2 bg-slate-50 dark:bg-slate-800 rounded">
-//         <div className="w-16 h-12 bg-slate-200 dark:bg-slate-700 rounded relative">
-//           <div className="absolute w-2 h-2 bg-blue-500 rounded-full top-2 left-2"></div>
-//           <div className="absolute w-2 h-2 bg-blue-500 rounded-full top-4 left-6"></div>
-//           <div className="absolute w-2 h-2 bg-blue-500 rounded-full top-6 left-4"></div>
-//         </div>
-//       </div>
-//     )
-//   },
-  {
-    id: "pie-chart",
-    name: "Pie Chart",
-    description: "Show parts of a whole",
-    category: "Part of a Whole",
-    tags: ["Popular", "Part of a Whole"],
-    icon: <PieChart className="size-4" />,
-    preview: (
-      <div className="p-2 bg-slate-50 dark:bg-slate-800 rounded">
-        <div className="w-12 h-12 rounded-full bg-gradient-to-r from-red-500 via-yellow-500 to-green-500"></div>
-      </div>
-    )
-  },
-  {
-    id: "bar-chart-legacy",
-    name: "Bar Chart (legacy)",
-    description: "Legacy bar chart implementation",
-    category: "Ranking",
-    tags: ["Legacy"],
-    deprecated: true,
-    icon: <BarChart3 className="size-4" />,
-    preview: (
-      <div className="p-2 bg-slate-50 dark:bg-slate-800 rounded relative">
-        <div className="w-16 h-12 bg-gradient-to-r from-yellow-500 to-green-500 rounded"></div>
-        <div className="absolute top-0 right-0 bg-red-500 text-white text-xs px-1 rounded">DEPRECATED</div>
-      </div>
-    )
-  },
-  {
-    id: "world-map",
-    name: "World Map",
-    description: "Geographic data visualization",
-    category: "Map",
-    tags: ["Map", "Geographic"],
-    icon: <Globe className="size-4" />,
-    preview: (
-      <div className="p-2 bg-slate-50 dark:bg-slate-800 rounded">
-        <div className="w-16 h-12 bg-blue-200 dark:bg-blue-800 rounded relative">
-          <div className="absolute inset-0 bg-gradient-to-br from-blue-300 to-blue-600 rounded"></div>
-        </div>
-      </div>
-    )
-  },
-  {
-    id: "waterfall-chart",
-    name: "Waterfall Chart",
-    description: "Show cumulative effect of values",
-    category: "Evolution",
-    tags: ["Advanced-Analytics", "Evolution"],
-    icon: <Zap className="size-4" />,
-    preview: (
-      <div className="p-2 bg-slate-50 dark:bg-slate-800 rounded">
-        <div className="flex items-end gap-1 h-12">
-          <div className="w-2 bg-red-500 rounded-t h-4"></div>
-          <div className="w-2 bg-green-500 rounded-t h-8"></div>
-          <div className="w-2 bg-red-500 rounded-t h-6"></div>
-        </div>
-      </div>
-    )
-  }
-]
-
-const categories = [
-  "Correlation",
-  "Distribution", 
-  "Evolution",
-  "Flow",
-  "KPI",
-  "Map",
-  "Part of a Whole",
-  "Ranking",
-  "Table"
-]
-
-const recommendedTags = [
-  { name: "Popular", active: true },
-  { name: "ECharts", active: false },
-  { name: "Advanced-Analytics", active: false }
-]
 
 interface CreateChartModalProps {
   isOpen: boolean
@@ -264,31 +55,19 @@ export default function CreateChartModal({ isOpen, onClose, onChartSelect }: Cre
   const [selectedDataset, setSelectedDataset] = useState("")
   const [searchTerm, setSearchTerm] = useState("")
   const [selectedCategory, setSelectedCategory] = useState("All charts")
-  const [selectedTags, setSelectedTags] = useState<string[]>(["Popular"])
   const [expandedSections, setExpandedSections] = useState({
-    recommended: true,
-    category: true
+    recommended: true
   })
 
-  const filteredCharts = chartTypes.filter(chart => {
+  const filteredCharts = CHART_TYPES.filter(chart => {
     const matchesSearch = chart.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
                          chart.description.toLowerCase().includes(searchTerm.toLowerCase())
     
     const matchesCategory = selectedCategory === "All charts" || chart.category === selectedCategory
     
-    const matchesTags = selectedTags.length === 0 || 
-                       selectedTags.some(tag => chart.tags.includes(tag))
-    
-    return matchesSearch && matchesCategory && matchesTags
+    return matchesSearch && matchesCategory
   })
 
-  const toggleTag = (tag: string) => {
-    setSelectedTags(prev => 
-      prev.includes(tag) 
-        ? prev.filter(t => t !== tag)
-        : [...prev, tag]
-    )
-  }
 
   const toggleSection = (section: keyof typeof expandedSections) => {
     setExpandedSections(prev => ({
@@ -320,7 +99,7 @@ export default function CreateChartModal({ isOpen, onClose, onChartSelect }: Cre
                   All charts
                 </div>
 
-                {/* Recommended Tags */}
+                {/* Category Quick Filters */}
                 <Collapsible 
                   open={expandedSections.recommended}
                   onOpenChange={() => toggleSection('recommended')}
@@ -331,37 +110,7 @@ export default function CreateChartModal({ isOpen, onClose, onChartSelect }: Cre
                     ) : (
                       <ChevronRight className="size-4" />
                     )}
-                    Recommended tags
-                  </CollapsibleTrigger>
-                  <CollapsibleContent className="mt-3 space-y-2">
-                    {recommendedTags.map((tag) => (
-                      <button
-                        key={tag.name}
-                        onClick={() => toggleTag(tag.name)}
-                        className={`block w-full text-left px-3 py-2 rounded-md text-sm transition-colors ${
-                          selectedTags.includes(tag.name)
-                            ? 'bg-indigo-100 text-indigo-700 dark:bg-indigo-900 dark:text-indigo-300'
-                            : 'hover:bg-slate-100 dark:hover:bg-slate-700 text-slate-600 dark:text-slate-400'
-                        }`}
-                      >
-                        #{tag.name}
-                      </button>
-                    ))}
-                  </CollapsibleContent>
-                </Collapsible>
-
-                {/* Category */}
-                <Collapsible 
-                  open={expandedSections.category}
-                  onOpenChange={() => toggleSection('category')}
-                >
-                  <CollapsibleTrigger className="flex items-center gap-2 text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-slate-100 transition-colors">
-                    {expandedSections.category ? (
-                      <ChevronDown className="size-4" />
-                    ) : (
-                      <ChevronRight className="size-4" />
-                    )}
-                    Category
+                    Quick filters
                   </CollapsibleTrigger>
                   <CollapsibleContent className="mt-3 space-y-2">
                     <button
@@ -374,7 +123,7 @@ export default function CreateChartModal({ isOpen, onClose, onChartSelect }: Cre
                     >
                       All charts
                     </button>
-                    {categories.map((category) => (
+                    {CATEGORIES.map((category) => (
                       <button
                         key={category}
                         onClick={() => setSelectedCategory(category)}
@@ -389,6 +138,8 @@ export default function CreateChartModal({ isOpen, onClose, onChartSelect }: Cre
                     ))}
                   </CollapsibleContent>
                 </Collapsible>
+
+
               </div>
             </div>
 
@@ -402,21 +153,19 @@ export default function CreateChartModal({ isOpen, onClose, onChartSelect }: Cre
                   </h3>
                   <div className="flex items-center gap-4">
                     <div className="flex-1">
-                      <Select value={selectedDataset} onValueChange={setSelectedDataset}>
-                        <SelectTrigger className="h-11">
-                          <SelectValue placeholder="Choose a dataset" />
-                        </SelectTrigger>
-                        <SelectContent>
-                          <SelectItem value="dataset1">Sample Dataset 1</SelectItem>
-                          <SelectItem value="dataset2">Sample Dataset 2</SelectItem>
-                          <SelectItem value="dataset3">Sample Dataset 3</SelectItem>
-                        </SelectContent>
-                      </Select>
+                      <select 
+                        value={selectedDataset} 
+                        onChange={(e) => setSelectedDataset(e.target.value)}
+                        className="flex h-11 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background file:border-0 file:bg-transparent file:text-sm file:font-medium placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
+                      >
+                        <option value="">Choose a dataset</option>
+                        {DATASETS.map((dataset) => (
+                          <option key={dataset} value={dataset}>
+                            {dataset}
+                          </option>
+                        ))}
+                      </select>
                     </div>
-                    <Button variant="link" className="text-indigo-600 dark:text-indigo-400 p-0 h-auto">
-                      <ExternalLink className="size-4 mr-1" />
-                      Add a dataset or view instructions
-                    </Button>
                   </div>
                 </div>
 
@@ -438,41 +187,59 @@ export default function CreateChartModal({ isOpen, onClose, onChartSelect }: Cre
                   </div>
 
                   {/* Chart Grid */}
-                  <div className="grid grid-cols-2 lg:grid-cols-5 xl:grid-cols-6 gap-6">
-                    {filteredCharts.map((chart) => (
-                      <Card 
-                        key={chart.id}
-                        className="cursor-pointer hover:shadow-md transition-shadow border-slate-200 dark:border-slate-700"
-                        onClick={() => handleChartSelect(chart)}
-                      >
-                        <CardContent className="p-4">
-                          <div className="space-y-3">
-                            {/* Preview */}
-                            <div className="aspect-video bg-slate-50 dark:bg-slate-800 rounded-md overflow-hidden">
-                              {chart.preview}
-                            </div>
-                            
-                            {/* Chart Info */}
-                            <div className="space-y-2">
-                              <div className="flex items-center gap-2">
-                                {chart.icon}
-                                <h4 className="font-medium text-slate-900 dark:text-slate-100 text-sm">
-                                  {chart.name}
-                                </h4>
-                                {chart.deprecated && (
-                                  <Badge variant="destructive" className="text-xs">
-                                    DEPRECATED
-                                  </Badge>
-                                )}
+                  <div className="min-h-[400px]">
+                    <div className="grid grid-cols-2 lg:grid-cols-4 xl:grid-cols-5 gap-4">
+                      {filteredCharts.map((chart) => (
+                        <Card 
+                          key={chart.id}
+                          className="cursor-pointer hover:shadow-md transition-shadow border-slate-200 dark:border-slate-700"
+                          onClick={() => handleChartSelect(chart)}
+                        >
+                          <CardContent className="p-4">
+                            <div className="space-y-3">
+                              {/* Preview */}
+                              <div className="aspect-video bg-slate-50 dark:bg-slate-800 rounded-md overflow-hidden">
+                                <img 
+                                  src={chart.preview} 
+                                  alt={`${chart.name} preview`}
+                                  className="w-full h-full object-cover"
+                                  onError={(e) => {
+                                    // Fallback to a placeholder if image fails to load
+                                    const target = e.target as HTMLImageElement;
+                                    target.style.display = 'none';
+                                    const nextElement = target.nextElementSibling as HTMLElement;
+                                    if (nextElement) {
+                                      nextElement.style.display = 'flex';
+                                    }
+                                  }}
+                                />
+                                <div className="w-full h-full flex items-center justify-center text-slate-500 dark:text-slate-400 text-sm" style={{display: 'none'}}>
+                                  Preview not available
+                                </div>
                               </div>
-                              <p className="text-xs text-slate-600 dark:text-slate-400">
-                                {chart.description}
-                              </p>
+                              
+                              {/* Chart Info */}
+                              <div className="space-y-2">
+                                <div className="flex items-center gap-2">
+                                  {chart.icon}
+                                  <h4 className="font-medium text-slate-900 dark:text-slate-100 text-sm">
+                                    {chart.name}
+                                  </h4>
+                                  {chart.deprecated && (
+                                    <Badge variant="destructive" className="text-xs">
+                                      DEPRECATED
+                                    </Badge>
+                                  )}
+                                </div>
+                                <p className="text-xs text-slate-600 dark:text-slate-400">
+                                  {chart.description}
+                                </p>
+                              </div>
                             </div>
-                          </div>
-                        </CardContent>
-                      </Card>
-                    ))}
+                          </CardContent>
+                        </Card>
+                      ))}
+                    </div>
                   </div>
                 </div>
               </div>
