@@ -1,7 +1,6 @@
 "use client"
 
 import { useState, useEffect } from "react"
-import Navbar04Page from "@/components/navbar-04/navbar-04"
 import { useOnboardingApi } from "@/hooks/useApi"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
@@ -225,10 +224,8 @@ export default function ChartsPage() {
   }
 
   return (
-    <div className="min-h-svh bg-slate-50 dark:bg-slate-900">
-      <Navbar04Page />
-      
-      <div className="pt-20 px-6 pb-6">
+    <>
+      <div className="">
         {/* Header */}
         <div className="flex items-center justify-between mb-6">
           <div>
@@ -535,6 +532,6 @@ export default function ChartsPage() {
           </span>
         </div>
       </div>
-    </div>
+    </>
   )
 }
