@@ -42,6 +42,7 @@ import {
   PopoverTrigger,
 } from "@/components/ui/popover"
 import { format } from "date-fns"
+import CreateChartModal from "@/components/create-chart-modal"
 
 interface Chart {
   id: string
@@ -72,6 +73,7 @@ export default function ChartsPage() {
   const [fromDate, setFromDate] = useState<string>("")
   const [toDate, setToDate] = useState<string>("")
   const [isFiltersExpanded, setIsFiltersExpanded] = useState(false)
+  const [isCreateModalOpen, setIsCreateModalOpen] = useState(false)
 
   const onboardingApi = useOnboardingApi()
 
@@ -261,7 +263,10 @@ export default function ChartsPage() {
               <Download className="size-4 mr-2" />
               Export
             </Button>
-            <Button size="sm">
+            <Button 
+              size="sm"
+              onClick={() => setIsCreateModalOpen(true)}
+            >
               <Plus className="size-4 mr-2" />
               New Chart
             </Button>
@@ -550,6 +555,18 @@ export default function ChartsPage() {
           </span>
         </div>
       </div>
+
+      {/* Create Chart Modal */}
+      <CreateChartModal
+        isOpen={isCreateModalOpen}
+        onClose={() => setIsCreateModalOpen(false)}
+        onChartSelect={(chartType) => {
+          console.log('Selected chart type:', chartType)
+          // Handle chart creation logic here
+          // For now, just show a success message
+          alert(`Creating ${chartType.name} chart...`)
+        }}
+      />
     </>
   )
 }
