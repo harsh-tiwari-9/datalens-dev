@@ -20,11 +20,11 @@ export const NavMenu = (props: ComponentProps<typeof NavigationMenu>) => (
           <Link href="/sqllab">SQL Lab</Link>
         </NavigationMenuLink>
       </NavigationMenuItem>
-      <NavigationMenuItem>
-        <NavigationMenuLink asChild>
-          <Link href="#">Charts</Link>
-        </NavigationMenuLink>
-      </NavigationMenuItem>
+            <NavigationMenuItem>
+              <NavigationMenuLink asChild>
+                <Link href="/charts">Charts</Link>
+              </NavigationMenuLink>
+            </NavigationMenuItem>
       {/* <NavigationMenuItem>
         <NavigationMenuLink asChild>
           <Link href="#"></Link>

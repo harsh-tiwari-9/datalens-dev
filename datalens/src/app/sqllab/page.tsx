@@ -141,6 +141,11 @@ export default function SqlLabPage() {
 
   const downloadData = () => {
     if (results.length === 0) return
+
+    if(results.length > 10000) {
+      toast.error("Only 10,000 rows can be downloaded at a time.")
+      return
+    }
     
     try {
       // Convert results to CSV format
