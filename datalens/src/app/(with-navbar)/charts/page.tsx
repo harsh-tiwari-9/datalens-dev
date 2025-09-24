@@ -302,7 +302,7 @@ export default function ChartsPage() {
         )}
 
         {/* Search and Filters */}
-        <Card className="mb-6 border-0 shadow-sm bg-gradient-to-r from-slate-50 to-slate-100 dark:from-slate-800 dark:to-slate-900">
+        <Card className="mb-6 py-0 border-0 shadow-sm bg-gradient-to-r from-slate-50 to-slate-100 dark:from-slate-800 dark:to-slate-900">
           {/* Filter Header */}
           <div 
             className="flex items-center justify-between p-6 cursor-pointer hover:bg-slate-100/50 dark:hover:bg-slate-700/50 transition-colors"
