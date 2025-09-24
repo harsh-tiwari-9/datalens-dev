@@ -18,7 +18,8 @@ import {
   Plus,
   CheckSquare,
   Square,
-  Calendar as CalendarIcon
+  Calendar as CalendarIcon,
+  X
 } from "lucide-react"
 import {
   DropdownMenu,
@@ -161,16 +162,36 @@ export default function ChartsPage() {
 
   const getAppliedFilters = () => {
     const applied = []
-    if (searchTerm) applied.push(`Search: "${searchTerm}"`)
-    if (filters.chartType.length > 0) applied.push(`Types: ${filters.chartType.join(", ")}`)
+    if (searchTerm) applied.push({ type: 'search', label: `"${searchTerm}"`, value: searchTerm })
+    if (filters.chartType.length > 0) applied.push({ type: 'chartType', label: `Types: ${filters.chartType.join(", ")}`, value: filters.chartType })
     if (dateRange?.from || dateRange?.to) {
       const from = dateRange.from ? format(dateRange.from, "MMM dd, yyyy") : "Start"
       const to = dateRange.to ? format(dateRange.to, "MMM dd, yyyy") : "End"
-      applied.push(`Date: ${from} - ${to}`)
+      applied.push({ type: 'dateRange', label: `Date: ${from} - ${to}`, value: dateRange })
     }
-    if (fromDate) applied.push(`From: ${format(new Date(fromDate), "MMM dd, yyyy")}`)
-    if (toDate) applied.push(`To: ${format(new Date(toDate), "MMM dd, yyyy")}`)
+    if (fromDate) applied.push({ type: 'fromDate', label: `From: ${format(new Date(fromDate), "MMM dd, yyyy")}`, value: fromDate })
+    if (toDate) applied.push({ type: 'toDate', label: `To: ${format(new Date(toDate), "MMM dd, yyyy")}`, value: toDate })
     return applied
+  }
+
+  const removeFilter = (filterType: string) => {
+    switch (filterType) {
+      case 'search':
+        setSearchTerm("")
+        break
+      case 'chartType':
+        setFilters(prev => ({ ...prev, chartType: [] }))
+        break
+      case 'dateRange':
+        setDateRange(undefined)
+        break
+      case 'fromDate':
+        setFromDate("")
+        break
+      case 'toDate':
+        setToDate("")
+        break
+    }
   }
 
   const formatDate = (dateString: string | null) => {
@@ -257,102 +278,93 @@ export default function ChartsPage() {
         )}
 
         {/* Search and Filters */}
-        <Card className="mb-6">
+        <Card className="mb-6 border-0 shadow-sm bg-gradient-to-r from-slate-50 to-slate-100 dark:from-slate-800 dark:to-slate-900">
           <CardContent className="p-6">
-            <div className="flex flex-col gap-4">
+            <div className="space-y-6">
               {/* Applied Filters */}
               {getAppliedFilters().length > 0 && (
-                <div className="flex flex-wrap gap-2">
-                  <span className="text-sm font-medium text-slate-600 dark:text-slate-400">Applied filters:</span>
+                <div className="flex flex-wrap items-center gap-2">
+                  <span className="text-sm font-medium text-slate-500 dark:text-slate-400">Active filters:</span>
                   {getAppliedFilters().map((filter, index) => (
-                    <Badge key={index} variant="secondary" className="text-xs">
-                      {filter}
-                    </Badge>
+                    <div
+                      key={index}
+                      className="inline-flex items-center gap-1 px-3 py-1.5 bg-slate-200/60 dark:bg-slate-700/60 text-slate-700 dark:text-slate-300 rounded-full text-xs font-medium hover:bg-slate-300/60 dark:hover:bg-slate-600/60 transition-colors"
+                    >
+                      <span>{filter.label}</span>
+                      <button
+                        onClick={() => removeFilter(filter.type)}
+                        className="ml-1 hover:bg-slate-400/20 dark:hover:bg-slate-500/20 rounded-full p-0.5 transition-colors"
+                      >
+                        <X className="size-3" />
+                      </button>
+                    </div>
                   ))}
                 </div>
               )}
 
-              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+              {/* Main Filter Row */}
+              <div className="flex flex-col lg:flex-row gap-4">
                 {/* Search Bar */}
-                <div className="relative">
+                <div className="relative flex-1">
                   <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-slate-400 size-4" />
                   <Input
                     placeholder="Search by chart name..."
                     value={searchTerm}
                     onChange={(e) => setSearchTerm(e.target.value)}
-                    className="pl-10"
+                    className="pl-10 h-11 border-slate-200 dark:border-slate-700 focus:ring-2 focus:ring-indigo-500/20"
                   />
                 </div>
 
-                {/* Chart Type Multi-Select */}
-                <div>
-                  <label className="text-sm font-medium text-slate-700 dark:text-slate-300 mb-2 block">
-                    Chart Types
-                  </label>
-                  <div className="flex flex-wrap gap-2">
-                    {["bar", "line", "area", "pie", "scatter"].map((type) => (
-                      <Button
-                        key={type}
-                        variant={filters.chartType.includes(type) ? "default" : "outline"}
-                        size="sm"
-                        onClick={() => toggleChartType(type)}
-                        className="text-xs"
-                      >
-                        {type.charAt(0).toUpperCase() + type.slice(1)}
-                      </Button>
-                    ))}
-                  </div>
+                {/* Chart Type Dropdown */}
+                <div className="min-w-[200px]">
+                  <Select 
+                    value={filters.chartType.length > 0 ? filters.chartType[0] : "all"} 
+                    onValueChange={(value) => {
+                      if (value === "all") {
+                        setFilters(prev => ({ ...prev, chartType: [] }))
+                      } else {
+                        setFilters(prev => ({ 
+                          ...prev, 
+                          chartType: prev.chartType.includes(value) 
+                            ? prev.chartType.filter(type => type !== value)
+                            : [...prev.chartType, value]
+                        }))
+                      }
+                    }}
+                  >
+                    <SelectTrigger className="h-11 border-slate-200 dark:border-slate-700 focus:ring-2 focus:ring-indigo-500/20">
+                      <SelectValue placeholder="Chart type" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="all">All chart types</SelectItem>
+                      <SelectItem value="bar">Bar Chart</SelectItem>
+                      <SelectItem value="line">Line Chart</SelectItem>
+                      <SelectItem value="area">Area Chart</SelectItem>
+                      <SelectItem value="pie">Pie Chart</SelectItem>
+                      <SelectItem value="scatter">Scatter Plot</SelectItem>
+                    </SelectContent>
+                  </Select>
                 </div>
 
-                {/* From Date */}
-                <div>
-                  <label className="text-sm font-medium text-slate-700 dark:text-slate-300 mb-2 block">
-                    From Date
-                  </label>
-                  <Input
-                    type="date"
-                    value={fromDate}
-                    onChange={(e) => setFromDate(e.target.value)}
-                  />
-                </div>
-
-                {/* To Date */}
-                <div>
-                  <label className="text-sm font-medium text-slate-700 dark:text-slate-300 mb-2 block">
-                    To Date
-                  </label>
-                  <Input
-                    type="date"
-                    value={toDate}
-                    onChange={(e) => setToDate(e.target.value)}
-                  />
-                </div>
-              </div>
-
-              {/* Date Range Picker */}
-              <div className="flex items-center gap-4">
+                {/* Date Range Picker */}
                 <div className="min-w-[250px]">
-                  <label className="text-sm font-medium text-slate-700 dark:text-slate-300 mb-2 block">
-                    Date Range Picker
-                  </label>
                   <Popover>
                     <PopoverTrigger asChild>
                       <Button
                         variant="outline"
-                        className="w-full justify-start text-left font-normal"
+                        className="w-full h-11 justify-start text-left font-normal border-slate-200 dark:border-slate-700 focus:ring-2 focus:ring-indigo-500/20"
                       >
                         <CalendarIcon className="mr-2 h-4 w-4" />
                         {dateRange?.from ? (
                           dateRange.to ? (
                             <>
-                              {format(dateRange.from, "LLL dd, y")} -{" "}
-                              {format(dateRange.to, "LLL dd, y")}
+                              {format(dateRange.from, "MMM dd")} - {format(dateRange.to, "MMM dd")}
                             </>
                           ) : (
-                            format(dateRange.from, "LLL dd, y")
+                            format(dateRange.from, "MMM dd, yyyy")
                           )
                         ) : (
-                          <span>Pick a date range</span>
+                          <span>Pick date range</span>
                         )}
                       </Button>
                     </PopoverTrigger>
@@ -372,19 +384,47 @@ export default function ChartsPage() {
                 </div>
 
                 {/* Clear Filters */}
-                <div className="flex items-end">
-                  <Button
-                    variant="outline"
-                    onClick={() => {
-                      setSearchTerm("")
-                      setFilters({ type: "all", chartType: [], dateRange: "all" })
-                      setDateRange(undefined)
-                      setFromDate("")
-                      setToDate("")
-                    }}
-                  >
-                    Clear All Filters
-                  </Button>
+                <Button
+                  variant="outline"
+                  onClick={() => {
+                    setSearchTerm("")
+                    setFilters({ type: "all", chartType: [], dateRange: "all" })
+                    setDateRange(undefined)
+                    setFromDate("")
+                    setToDate("")
+                  }}
+                  className="h-11 border-slate-200 dark:border-slate-700 hover:bg-slate-50 dark:hover:bg-slate-800"
+                >
+                  Clear All
+                </Button>
+              </div>
+
+              {/* Secondary Filter Row */}
+              <div className="flex flex-col sm:flex-row gap-4">
+                {/* From Date */}
+                <div className="flex-1">
+                  <label className="text-xs font-medium text-slate-600 dark:text-slate-400 mb-1 block">
+                    From Date
+                  </label>
+                  <Input
+                    type="date"
+                    value={fromDate}
+                    onChange={(e) => setFromDate(e.target.value)}
+                    className="h-10 border-slate-200 dark:border-slate-700 focus:ring-2 focus:ring-indigo-500/20"
+                  />
+                </div>
+
+                {/* To Date */}
+                <div className="flex-1">
+                  <label className="text-xs font-medium text-slate-600 dark:text-slate-400 mb-1 block">
+                    To Date
+                  </label>
+                  <Input
+                    type="date"
+                    value={toDate}
+                    onChange={(e) => setToDate(e.target.value)}
+                    className="h-10 border-slate-200 dark:border-slate-700 focus:ring-2 focus:ring-indigo-500/20"
+                  />
                 </div>
               </div>
             </div>
