@@ -304,7 +304,7 @@ export default function CreateChartModal({ isOpen, onClose, onChartSelect }: Cre
 
   return (
     <Dialog open={isOpen} onOpenChange={onClose}>
-      <DialogContent className="max-w-[95vw] w-full h-[90vh] p-0">
+      <DialogContent className="max-w-none sm:max-w-none w-[95vw] h-[90vh] p-0">
         <DialogHeader className="p-6 pb-4">
           <DialogTitle className="text-2xl font-bold">Create a new chart</DialogTitle>
         </DialogHeader>
