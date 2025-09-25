@@ -8,21 +8,7 @@ export default function CreateChartLayout({
 }: {
   children: React.ReactNode
 }) {
-  const [hasCheckedToken, setHasCheckedToken] = useState(false)
-  const router = useRouter()
-
-  useEffect(() => {
-    const token = localStorage.getItem('token')
-    if (!token) {
-      router.push('/login')
-      return
-    }
-    setHasCheckedToken(true)
-  }, [router])
-
-  if (!hasCheckedToken) {
-    return null
-  }
+  
 
   return <>{children}</>
 }

@@ -6,28 +6,11 @@ import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Badge } from "@/components/ui/badge"
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { useIotAnalyticsApi } from "@/hooks/useApi"
 import { useRouter, useSearchParams } from "next/navigation"
-import { ArrowLeft, Play, Save, MoreHorizontal } from "lucide-react"
-
-interface Column {
-  name: string
-  type: string
-}
-
-interface Metric {
-  name: string
-  type: string
-}
-
-const METRICS = [
-  { name: "AVG", type: "aggregate" },
-  { name: "COUNT", type: "aggregate" },
-  { name: "COUNT_DISTINCT", type: "aggregate" },
-  { name: "MAX", type: "aggregate" },
-  { name: "MIN", type: "aggregate" },
-  { name: "SUM", type: "aggregate" }
-]
+import { ArrowLeft, Play, Save, MoreHorizontal, RefreshCw } from "lucide-react"
+import { METRICS, DATASETS, Metric, Column } from "@/constants/chart-creation"
 
 export default function CreateChartPage() {
   const router = useRouter()
@@ -45,14 +28,17 @@ export default function CreateChartPage() {
   // Chart configuration
   const [xAxis, setXAxis] = useState("")
   const [metrics, setMetrics] = useState<string[]>([])
+  const [metricColumns, setMetricColumns] = useState<{[key: string]: string}>({})
   const [dimensions, setDimensions] = useState<string[]>([])
   const [filters, setFilters] = useState<string[]>([])
   const [rowLimit, setRowLimit] = useState(10000)
   const [sortBy, setSortBy] = useState("")
   
   // Chart preview
-  const [chartData, setChartData] = useState(null)
-  const [queryResult, setQueryResult] = useState(null)
+  const [chartData, setChartData] = useState<any[] | null>(null)
+  const [queryResult, setQueryResult] = useState<any[] | null>(null)
+  const [draggedColumn, setDraggedColumn] = useState<string | null>(null)
+  const [dragOverTarget, setDragOverTarget] = useState<string | null>(null)
 
   useEffect(() => {
     const dataset = searchParams.get('dataset')
@@ -75,7 +61,7 @@ export default function CreateChartPage() {
   const fetchColumns = async (dataset: string) => {
     try {
       setLoading(true)
-      const response = await apiRequest(`/jviz/analytics/druid/table/${dataset}/columns`)
+      const response = await apiRequest(`/jviz/analytics/druid/custom-list-keys?tableName=${dataset}`)
       if (response?.data?.list) {
         const columnList = response.data.list.map((col: string) => ({
           name: col,
@@ -90,12 +76,35 @@ export default function CreateChartPage() {
     }
   }
 
+  const handleDatasetChange = (newDataset: string) => {
+    setSelectedDataset(newDataset)
+    setColumns([]) // Clear existing columns
+    setMetrics([]) // Clear selected metrics
+    setDimensions([]) // Clear selected dimensions
+    setFilters([]) // Clear selected filters
+    fetchColumns(newDataset)
+  }
+
   const handleMetricToggle = (metric: string) => {
-    setMetrics(prev => 
-      prev.includes(metric) 
-        ? prev.filter(m => m !== metric)
-        : [...prev, metric]
-    )
+    setMetrics(prev => {
+      if (prev.includes(metric)) {
+        // Remove metric and its column selection
+        const newMetrics = prev.filter(m => m !== metric)
+        const newMetricColumns = { ...metricColumns }
+        delete newMetricColumns[metric]
+        setMetricColumns(newMetricColumns)
+        return newMetrics
+      } else {
+        // Add metric with default column selection
+        const defaultColumn = xAxis || (dimensions.length > 0 ? dimensions[0] : columns.length > 0 ? columns[0].name : 'id')
+        setMetricColumns(prev => ({ ...prev, [metric]: defaultColumn }))
+        return [...prev, metric]
+      }
+    })
+  }
+
+  const handleMetricColumnChange = (metric: string, column: string) => {
+    setMetricColumns(prev => ({ ...prev, [metric]: column }))
   }
 
   const handleDimensionToggle = (column: string) => {
@@ -114,29 +123,122 @@ export default function CreateChartPage() {
     )
   }
 
+  const handleDragStart = (columnName: string) => {
+    setDraggedColumn(columnName)
+  }
+
+  const handleDragEnd = () => {
+    setDraggedColumn(null)
+  }
+
+  const handleDrop = (target: 'dimensions' | 'filters' | 'xaxis', e: React.DragEvent) => {
+    e.preventDefault()
+    if (!draggedColumn) return
+
+    if (target === 'xaxis') {
+      setXAxis(draggedColumn)
+    } else if (target === 'dimensions') {
+      if (!dimensions.includes(draggedColumn)) {
+        setDimensions(prev => [...prev, draggedColumn])
+      }
+    } else if (target === 'filters') {
+      if (!filters.includes(draggedColumn)) {
+        setFilters(prev => [...prev, draggedColumn])
+      }
+    }
+    setDraggedColumn(null)
+  }
+
+  const handleDragOver = (e: React.DragEvent, target: string) => {
+    e.preventDefault()
+    setDragOverTarget(target)
+  }
+
+  const handleDragLeave = () => {
+    setDragOverTarget(null)
+  }
+
   const generateQuery = () => {
     let query = "SELECT "
+    const selectParts: string[] = []
     
-    // Add dimensions
-    if (dimensions.length > 0) {
-      query += dimensions.join(", ") + ", "
+    // Add X-axis (if specified) - this is the primary dimension
+    if (xAxis) {
+      selectParts.push(`"${xAxis}"`)
     }
     
-    // Add metrics
+    // Add other dimensions (excluding x-axis to avoid duplication)
+    const uniqueDimensions = dimensions.filter(d => d !== xAxis)
+    if (uniqueDimensions.length > 0) {
+      selectParts.push(...uniqueDimensions.map(d => `"${d}"`))
+    }
+    
+    // Add metrics - these need to reference actual columns
     if (metrics.length > 0) {
       const metricExpressions = metrics.map(metric => {
-        if (metric === "COUNT") return "COUNT(*)"
-        if (metric === "COUNT_DISTINCT") return "COUNT(DISTINCT *)"
-        return `${metric}(*)`
+        // For metrics, we need to specify which columns to aggregate
+        // For now, we'll use a generic approach, but in a real implementation,
+        // users should be able to select which columns to aggregate
+        
+        if (metric === "COUNT") {
+          return "COUNT(*) as count_total"
+        }
+        
+        // For other metrics (SUM, AVG, MAX, MIN), use the selected column
+        const metricColumn = metricColumns[metric] || 'id'
+        
+        return `${metric}("${metricColumn}") as ${metric.toLowerCase()}_total`
       })
-      query += metricExpressions.join(", ")
+      selectParts.push(...metricExpressions)
     }
     
+    // If no dimensions or metrics, add a basic count
+    if (selectParts.length === 0) {
+      selectParts.push("COUNT(*) as total_count")
+    }
+    
+    query += selectParts.join(", ")
     query += ` FROM "${selectedDataset}"`
     
-    // Add filters
+    // Add WHERE clause for filters
+    const whereConditions: string[] = []
+    
+    // Add time-based filters if x-axis is a time column
+    if (xAxis && xAxis.includes('__time')) {
+      // Add default time range (last 30 days)
+      whereConditions.push(`"${xAxis}" >= CURRENT_TIMESTAMP - INTERVAL '30' DAY`)
+    }
+    
+    // Add column-based filters
     if (filters.length > 0) {
-      query += " WHERE " + filters.map(filter => `${filter} IS NOT NULL`).join(" AND ")
+      const filterConditions = filters.map(filter => {
+        // Basic filter - you might want to make this more sophisticated
+        return `"${filter}" IS NOT NULL`
+      })
+      whereConditions.push(...filterConditions)
+    }
+    
+    if (whereConditions.length > 0) {
+      query += " WHERE " + whereConditions.join(" AND ")
+    }
+    
+    // Add GROUP BY clause - only group by if we have aggregations
+    const groupByColumns: string[] = []
+    if (xAxis) groupByColumns.push(`"${xAxis}"`)
+    if (uniqueDimensions.length > 0) {
+      groupByColumns.push(...uniqueDimensions.map(d => `"${d}"`))
+    }
+    
+    // Only add GROUP BY if we have metrics (aggregations)
+    if (metrics.length > 0 && groupByColumns.length > 0) {
+      query += " GROUP BY " + groupByColumns.join(", ")
+    }
+    
+    // Add ORDER BY clause
+    if (xAxis) {
+      query += ` ORDER BY "${xAxis}" ASC`
+    } else if (uniqueDimensions.length > 0) {
+      query += ` GROUP BY "${uniqueDimensions[0]}" ASC`
     }
     
     // Add row limit
@@ -155,12 +257,35 @@ export default function CreateChartPage() {
         method: 'POST',
         body: { queryBody: query }
       })
-      if (response?.data) {
-        setQueryResult(response.data)
-        setChartData(response.data)
+      
+      console.log('Query Response:', response)
+      
+      if (response && typeof response === 'object') {
+        const data = response as any
+        if (Array.isArray(data)) {
+          // If response is array of rows
+          setQueryResult(data)
+          setChartData(data)
+          console.log(`Query executed successfully. ${data.length} rows returned.`)
+        } else if (data?.data && Array.isArray(data.data)) {
+          // If response has data property
+          setQueryResult(data.data)
+          setChartData(data.data)
+          console.log(`Query executed successfully. ${data.data.length} rows returned.`)
+        } else {
+          setQueryResult([])
+          setChartData(null)
+          console.log("No data returned from query")
+        }
+      } else {
+        setQueryResult([])
+        setChartData(null)
+        console.log("Invalid response format")
       }
     } catch (error) {
       console.error('Error creating chart:', error)
+      setQueryResult([])
+      setChartData(null)
     } finally {
       setLoading(false)
     }
@@ -169,9 +294,9 @@ export default function CreateChartPage() {
   const isCreateButtonDisabled = !chartName || metrics.length === 0
 
   return (
-    <div className="min-h-screen bg-slate-50 dark:bg-slate-900 -mx-4 -my-28">
+    <div className="bg-slate-50 dark:bg-slate-900">
       {/* Top Bar */}
-      <div className="bg-white dark:bg-slate-800 border-b border-slate-200 dark:border-slate-700 px-6 py-4">
+      <div className="bg-white dark:bg-slate-800 border-b border-slate-200 dark:border-slate-700 px-4 py-4">
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-4">
             <Button
@@ -208,7 +333,6 @@ export default function CreateChartPage() {
           </div>
         </div>
         
-        {/* Chart Name Input */}
         <div className="mt-4">
           <Input
             placeholder="Add the name of the chart"
@@ -221,9 +345,9 @@ export default function CreateChartPage() {
 
       <div className="flex h-[calc(100vh-200px)]">
         {/* Left Panel - Data Source */}
-        <div className="w-80 bg-white dark:bg-slate-800 border-r border-slate-200 dark:border-slate-700 flex flex-col">
+        <div className="w-64 bg-white dark:bg-slate-800 border-r border-slate-200 dark:border-slate-700 flex flex-col">
           <div className="p-4 border-b border-slate-200 dark:border-slate-700">
-            <div className="flex items-center justify-between">
+            <div className="flex items-center justify-between mb-3">
               <div className="flex items-center gap-2">
                 <div className="w-4 h-4 bg-slate-400 rounded"></div>
                 <span className="font-medium">Chart Source</span>
@@ -232,9 +356,18 @@ export default function CreateChartPage() {
                 <MoreHorizontal className="size-4" />
               </Button>
             </div>
-            <div className="mt-2 text-sm text-slate-600 dark:text-slate-400">
-              {selectedDataset}
-            </div>
+            <Select value={selectedDataset} onValueChange={handleDatasetChange}>
+              <SelectTrigger className="w-full">
+                <SelectValue placeholder="Select dataset" />
+              </SelectTrigger>
+              <SelectContent>
+                {DATASETS.map((dataset) => (
+                  <SelectItem key={dataset} value={dataset}>
+                    {dataset}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
           </div>
 
           <div className="p-4 border-b border-slate-200 dark:border-slate-700">
@@ -272,24 +405,72 @@ export default function CreateChartPage() {
             <div>
               <div className="flex items-center justify-between mb-3">
                 <span className="text-sm font-medium">Columns</span>
-                <span className="text-xs text-slate-500">Showing {columns.length} of {columns.length}</span>
+                <div className="flex items-center gap-2">
+                  <span className="text-xs text-slate-500">Showing {columns.length} of {columns.length}</span>
+                  <Button 
+                    variant="ghost" 
+                    size="sm" 
+                    onClick={() => fetchColumns(selectedDataset)}
+                    disabled={loading}
+                  >
+                    <RefreshCw className={`size-3 ${loading ? 'animate-spin' : ''}`} />
+                  </Button>
+                </div>
               </div>
               <div className="space-y-2 max-h-60 overflow-y-auto">
                 {loading ? (
                   <div className="text-center py-4 text-sm text-slate-500">Loading columns...</div>
+                ) : columns.length === 0 ? (
+                  <div className="text-center py-4 text-sm text-slate-500">No columns available</div>
                 ) : (
                   columns.map((column) => (
                     <div
                       key={column.name}
-                      className="flex items-center justify-between p-2 rounded hover:bg-slate-50 dark:hover:bg-slate-700 cursor-pointer"
+                      draggable
+                      onDragStart={() => handleDragStart(column.name)}
+                      onDragEnd={handleDragEnd}
+                      className={`flex items-center justify-between p-2 rounded hover:bg-slate-50 dark:hover:bg-slate-700 cursor-move group ${
+                        draggedColumn === column.name ? 'opacity-50' : ''
+                      }`}
+                      onClick={() => {
+                        // Add to dimensions by default, or cycle through options
+                        if (!dimensions.includes(column.name)) {
+                          setDimensions(prev => [...prev, column.name])
+                        }
+                      }}
                     >
                       <div className="flex items-center gap-2">
-                        <div className="w-4 h-4 bg-slate-400 rounded"></div>
+                        <div className={`w-4 h-4 rounded ${
+                          column.type === 'time' ? 'bg-blue-400' : 
+                          column.type === 'json' ? 'bg-green-400' : 'bg-slate-400'
+                        }`}></div>
                         <span className="text-sm">{column.name}</span>
+                        <span className="text-xs text-slate-400">({column.type})</span>
                       </div>
-                      <Button variant="ghost" size="sm">
-                        <MoreHorizontal className="size-3" />
-                      </Button>
+                      <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                        <Button 
+                          variant="ghost" 
+                          size="sm"
+                          onClick={(e) => {
+                            e.stopPropagation()
+                            setDimensions(prev => prev.includes(column.name) ? prev.filter(d => d !== column.name) : [...prev, column.name])
+                          }}
+                          className="h-6 px-2 text-xs"
+                        >
+                          D
+                        </Button>
+                        <Button 
+                          variant="ghost" 
+                          size="sm"
+                          onClick={(e) => {
+                            e.stopPropagation()
+                            setFilters(prev => prev.includes(column.name) ? prev.filter(f => f !== column.name) : [...prev, column.name])
+                          }}
+                          className="h-6 px-2 text-xs"
+                        >
+                          F
+                        </Button>
+                      </div>
                     </div>
                   ))
                 )}
@@ -299,7 +480,7 @@ export default function CreateChartPage() {
         </div>
 
         {/* Center Panel - Chart Configuration */}
-        <div className="flex-1 bg-white dark:bg-slate-800 border-r border-slate-200 dark:border-slate-700 p-6">
+        <div className="w-96 bg-white dark:bg-slate-800 border-r border-slate-200 dark:border-slate-700 p-6">
           <div className="mb-6">
             <div className="flex items-center gap-2 mb-4">
               <div className="w-6 h-6 bg-indigo-100 dark:bg-indigo-900 rounded flex items-center justify-center">
@@ -312,8 +493,17 @@ export default function CreateChartPage() {
           <div className="space-y-6">
             {/* X-Axis */}
             <div>
-              <Label className="text-sm font-medium mb-2 block">DIMENSIONS</Label>
-              <div className="border-2 border-dashed border-slate-300 dark:border-slate-600 rounded-lg p-4 min-h-[60px]">
+              <Label className="text-sm font-medium mb-2 block">X-AXIS</Label>
+              <div 
+                className={`border-2 border-dashed rounded-lg p-4 min-h-[60px] transition-colors ${
+                  dragOverTarget === 'xaxis' 
+                    ? 'border-indigo-500 bg-indigo-50 dark:bg-indigo-900/20' 
+                    : 'border-slate-300 dark:border-slate-600'
+                }`}
+                onDrop={(e) => handleDrop('xaxis', e)}
+                onDragOver={(e) => handleDragOver(e, 'xaxis')}
+                onDragLeave={handleDragLeave}
+              >
                 {xAxis ? (
                   <Badge 
                     variant="secondary" 
@@ -322,6 +512,38 @@ export default function CreateChartPage() {
                   >
                     {xAxis} ×
                   </Badge>
+                ) : (
+                  <span className="text-slate-500">+ Drop a column here for X-axis</span>
+                )}
+              </div>
+            </div>
+
+            {/* Dimensions */}
+            <div>
+              <Label className="text-sm font-medium mb-2 block">DIMENSIONS</Label>
+              <div 
+                className={`border-2 border-dashed rounded-lg p-4 min-h-[60px] transition-colors ${
+                  dragOverTarget === 'dimensions' 
+                    ? 'border-indigo-500 bg-indigo-50 dark:bg-indigo-900/20' 
+                    : 'border-slate-300 dark:border-slate-600'
+                }`}
+                onDrop={(e) => handleDrop('dimensions', e)}
+                onDragOver={(e) => handleDragOver(e, 'dimensions')}
+                onDragLeave={handleDragLeave}
+              >
+                {dimensions.length > 0 ? (
+                  <div className="flex flex-wrap gap-2">
+                    {dimensions.map((dimension) => (
+                      <Badge 
+                        key={dimension}
+                        variant="secondary" 
+                        className="cursor-pointer"
+                        onClick={() => setDimensions(prev => prev.filter(d => d !== dimension))}
+                      >
+                        {dimension} ×
+                      </Badge>
+                    ))}
+                  </div>
                 ) : (
                   <span className="text-slate-500">+ Drop columns here or click</span>
                 )}
@@ -333,16 +555,34 @@ export default function CreateChartPage() {
               <Label className="text-sm font-medium mb-2 block">METRIC</Label>
               <div className="border-2 border-dashed border-slate-300 dark:border-slate-600 rounded-lg p-4 min-h-[60px]">
                 {metrics.length > 0 ? (
-                  <div className="flex flex-wrap gap-2">
+                  <div className="space-y-2">
                     {metrics.map((metric) => (
-                      <Badge 
-                        key={metric}
-                        variant="secondary" 
-                        className="cursor-pointer"
-                        onClick={() => handleMetricToggle(metric)}
-                      >
-                        {metric} ×
-                      </Badge>
+                      <div key={metric} className="flex items-center gap-2">
+                        <Badge 
+                          variant="secondary" 
+                          className="cursor-pointer"
+                          onClick={() => handleMetricToggle(metric)}
+                        >
+                          {metric} ×
+                        </Badge>
+                        {metric !== "COUNT" && (
+                          <Select 
+                            value={metricColumns[metric] || ''} 
+                            onValueChange={(value) => handleMetricColumnChange(metric, value)}
+                          >
+                            <SelectTrigger className="w-32 h-6 text-xs">
+                              <SelectValue placeholder="Column" />
+                            </SelectTrigger>
+                            <SelectContent>
+                              {columns.map((column) => (
+                                <SelectItem key={column.name} value={column.name} className="text-xs">
+                                  {column.name}
+                                </SelectItem>
+                              ))}
+                            </SelectContent>
+                          </Select>
+                        )}
+                      </div>
                     ))}
                   </div>
                 ) : (
@@ -379,7 +619,16 @@ export default function CreateChartPage() {
             {/* Filters */}
             <div>
               <Label className="text-sm font-medium mb-2 block">FILTERS</Label>
-              <div className="border-2 border-dashed border-slate-300 dark:border-slate-600 rounded-lg p-4 min-h-[60px]">
+              <div 
+                className={`border-2 border-dashed rounded-lg p-4 min-h-[60px] transition-colors ${
+                  dragOverTarget === 'filters' 
+                    ? 'border-indigo-500 bg-indigo-50 dark:bg-indigo-900/20' 
+                    : 'border-slate-300 dark:border-slate-600'
+                }`}
+                onDrop={(e) => handleDrop('filters', e)}
+                onDragOver={(e) => handleDragOver(e, 'filters')}
+                onDragLeave={handleDragLeave}
+              >
                 {filters.length > 0 ? (
                   <div className="flex flex-wrap gap-2">
                     {filters.map((filter) => (
@@ -387,25 +636,24 @@ export default function CreateChartPage() {
                         key={filter}
                         variant="secondary" 
                         className="cursor-pointer"
-                        onClick={() => handleFilterToggle(filter)}
+                        onClick={() => setFilters(prev => prev.filter(f => f !== filter))}
                       >
                         {filter} ×
                       </Badge>
                     ))}
                   </div>
                 ) : (
-                  <span className="text-slate-500">+ Drop columns/metrics here or click</span>
+                  <span className="text-slate-500">+ Drop columns here or click</span>
                 )}
               </div>
             </div>
 
             {/* Create Chart Button */}
             <div className="pt-4">
-              <Button
-                onClick={handleCreateChart}
-                disabled={isCreateButtonDisabled || loading}
-                className="w-full"
-                size="lg"
+                <Button
+                  onClick={handleCreateChart}
+                  className="w-full"
+                  size="lg"
               >
                 {loading ? (
                   <div className="flex items-center gap-2">
@@ -424,22 +672,35 @@ export default function CreateChartPage() {
         </div>
 
         {/* Right Panel - Chart Preview */}
-        <div className="w-80 bg-white dark:bg-slate-800 p-6">
+        <div className="flex-1 bg-white dark:bg-slate-800 p-6">
           <div className="mb-4">
             <div className="text-sm font-medium mb-2">Chart Preview</div>
             {chartData ? (
-              <div className="bg-slate-50 dark:bg-slate-700 rounded-lg p-4 h-48 flex items-center justify-center">
-                <div className="text-center">
-                  <div className="w-16 h-16 bg-indigo-100 dark:bg-indigo-900 rounded-lg flex items-center justify-center mb-2">
+              <div className="bg-slate-50 dark:bg-slate-700 rounded-lg p-4 h-64">
+                <div className="text-center mb-3">
+                  <div className="w-16 h-16 bg-indigo-100 dark:bg-indigo-900 rounded-lg flex items-center justify-center mb-2 mx-auto">
                     <span className="text-2xl">📊</span>
                   </div>
-                  <div className="text-sm text-slate-600 dark:text-slate-400">
+                  <div className="text-sm text-slate-600 dark:text-slate-400 mb-2">
                     Chart rendered successfully
                   </div>
+                  <div className="text-xs text-slate-500">
+                    {Array.isArray(chartData) ? `${chartData.length} rows` : 'Data loaded'}
+                  </div>
                 </div>
+                {Array.isArray(chartData) && chartData.length > 0 && (
+                  <div className="text-xs text-slate-500">
+                    <div className="font-medium mb-1">Sample Data:</div>
+                    <div className="bg-white dark:bg-slate-800 rounded p-2 max-h-20 overflow-y-auto">
+                      <pre className="whitespace-pre-wrap">
+                        {JSON.stringify(chartData.slice(0, 2), null, 2)}
+                      </pre>
+                    </div>
+                  </div>
+                )}
               </div>
             ) : (
-              <div className="bg-slate-50 dark:bg-slate-700 rounded-lg p-4 h-48 flex items-center justify-center">
+              <div className="bg-slate-50 dark:bg-slate-700 rounded-lg p-4 h-64 flex items-center justify-center">
                 <div className="text-center">
                   <div className="text-sm font-medium mb-1">Add required control values to preview chart</div>
                   <div className="text-xs text-slate-500">
@@ -450,14 +711,41 @@ export default function CreateChartPage() {
             )}
           </div>
 
+          {/* Query Preview */}
+          <div className="mt-4">
+            <div className="text-sm font-medium mb-2">Generated Query</div>
+            <div className="bg-slate-50 dark:bg-slate-700 rounded-lg p-3 max-h-32 overflow-y-auto">
+              <pre className="text-xs text-slate-600 dark:text-slate-400 whitespace-pre-wrap">
+                {generateQuery()}
+              </pre>
+            </div>
+          </div>
+
           {/* Query Results */}
-          {queryResult && (
+          {queryResult && Array.isArray(queryResult) && queryResult.length > 0 && (
             <div className="mt-4">
-              <div className="text-sm font-medium mb-2">Query Results</div>
-              <div className="bg-slate-50 dark:bg-slate-700 rounded-lg p-3 max-h-32 overflow-y-auto">
-                <pre className="text-xs text-slate-600 dark:text-slate-400">
-                  {JSON.stringify(queryResult, null, 2)}
-                </pre>
+              <div className="text-sm font-medium mb-2">Query Results ({queryResult.length} rows)</div>
+              <div className="bg-slate-50 dark:bg-slate-700 rounded-lg p-3 max-h-40 overflow-y-auto">
+                <div className="text-xs text-slate-600 dark:text-slate-400">
+                  <div className="grid grid-cols-1 gap-1">
+                    {queryResult.slice(0, 5).map((row, index) => (
+                      <div key={index} className="flex items-center justify-between p-1 bg-white dark:bg-slate-800 rounded text-xs">
+                        <span className="font-mono">
+                          {Object.entries(row).map(([key, value]) => (
+                            <span key={key} className="mr-2">
+                              <span className="text-slate-500">{key}:</span> {String(value)}
+                            </span>
+                          ))}
+                        </span>
+                      </div>
+                    ))}
+                    {queryResult.length > 5 && (
+                      <div className="text-center text-slate-500 text-xs py-1">
+                        ... and {queryResult.length - 5} more rows
+                      </div>
+                    )}
+                  </div>
+                </div>
               </div>
             </div>
           )}
