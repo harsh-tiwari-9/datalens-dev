@@ -2,6 +2,7 @@ import { Button } from "@/components/ui/button";
 import { Logo } from "./logo";
 import { NavMenu } from "./nav-menu";
 import { NavigationSheet } from "./navigation-sheet";
+import { UserProfile } from "./user-profile";
 
 const Navbar04Page = () => {
   return (
@@ -14,7 +15,10 @@ const Navbar04Page = () => {
           </div>
 
           {/* Desktop Menu */}
-          <NavMenu className="hidden md:block" />
+          <div className="flex items-center gap-4">
+            <NavMenu className="hidden md:block" />
+            <UserProfile className="hidden sm:block" />
+          </div>
         </div>
       </nav>
     </div>
