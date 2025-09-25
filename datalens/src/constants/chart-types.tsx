@@ -61,7 +61,7 @@ export const CHART_TYPES: ChartType[] = [
     category: "Basic",
     tags: ["Popular", "Basic"],
     icon: <LineChart className="size-4" />,
-    preview: "/big-number.png"
+    preview: "/line-chart.png"
   },
   {
     id: "pie-chart",
@@ -70,7 +70,7 @@ export const CHART_TYPES: ChartType[] = [
     category: "Basic",
     tags: ["Popular", "Basic"],
     icon: <PieChart className="size-4" />,
-    preview: "/big-number.png"
+    preview: "/pie-chart.png"
   },
   {
     id: "area-chart",
@@ -79,7 +79,7 @@ export const CHART_TYPES: ChartType[] = [
     category: "Basic",
     tags: ["Popular", "Basic"],
     icon: <Activity className="size-4" />,
-    preview: "/big-number.png"
+    preview: "/area-chart.png"
   },
 
   // Advanced Charts
@@ -90,7 +90,7 @@ export const CHART_TYPES: ChartType[] = [
     category: "Advanced",
     tags: ["Advanced-Analytics", "Advanced"],
     icon: <Target className="size-4" />,
-    preview: "/big-number.png"
+    preview: "/scatter-plot.png"
   },
   {
     id: "multi-line",
@@ -99,7 +99,7 @@ export const CHART_TYPES: ChartType[] = [
     category: "Advanced",
     tags: ["Advanced-Analytics", "Advanced"],
     icon: <LineChart className="size-4" />,
-    preview: "/big-number.png"
+    preview: "/line-chart.png"
   },
   {
     id: "bubble-chart",
@@ -108,7 +108,7 @@ export const CHART_TYPES: ChartType[] = [
     category: "Advanced",
     tags: ["Advanced-Analytics", "Advanced"],
     icon: <Target className="size-4" />,
-    preview: "/big-number.png"
+    preview: "/bubble-chart.png"
   },
   {
     id: "heatmap",
@@ -117,7 +117,7 @@ export const CHART_TYPES: ChartType[] = [
     category: "Advanced",
     tags: ["Advanced-Analytics", "Advanced"],
     icon: <Map className="size-4" />,
-    preview: "/big-number.png"
+    preview: "/heat-map.png"
   },
 
   // Specialized Charts
@@ -128,7 +128,7 @@ export const CHART_TYPES: ChartType[] = [
     category: "Specialized",
     tags: ["Specialized", "Conversion"],
     icon: <Zap className="size-4" />,
-    preview: "/big-number.png"
+    preview: "/funnel-chart.png"
   },
   {
     id: "radar-chart",
@@ -137,7 +137,7 @@ export const CHART_TYPES: ChartType[] = [
     category: "Specialized",
     tags: ["Specialized", "Multi-variable"],
     icon: <Target className="size-4" />,
-    preview: "/big-number.png"
+    preview: "/radar-chart.png"
   },
   {
     id: "time-series",
@@ -146,16 +146,16 @@ export const CHART_TYPES: ChartType[] = [
     category: "Specialized",
     tags: ["Specialized", "Time"],
     icon: <TrendingUp className="size-4" />,
-    preview: "/big-number.png"
+    preview: "/timeseries-chart.png"
   },
   {
-    id: "histogram",
-    name: "Histogram",
-    description: "Show distribution of data values",
+    id: "tree-map",
+    name: "Tree Map",
+    description: "Show hierarchical relationships of data, with the value represented by area, showing proportion and contribution to the whole",
     category: "Specialized",
     tags: ["Specialized", "Distribution"],
     icon: <BarChart3 className="size-4" />,
-    preview: "/big-number.png"
+    preview: "/treemap.png"
   },
   {
     id: "graph-chart",
@@ -163,8 +163,8 @@ export const CHART_TYPES: ChartType[] = [
     description: "Show relationships between nodes and edges",
     category: "Specialized",
     tags: ["Specialized", "Network"],
-    icon: <Globe className="size-4" />,
-    preview: "/big-number.png"
+    icon: <Globe className="size-6" />,
+    preview: "/graph-chart.png"
   }
 ]
 

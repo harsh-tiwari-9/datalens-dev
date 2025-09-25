@@ -1,6 +1,7 @@
 "use client"
 
 import { useState } from "react"
+import { useRouter } from "next/navigation"
 import { Card, CardContent } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
@@ -52,6 +53,7 @@ interface CreateChartModalProps {
 }
 
 export default function CreateChartModal({ isOpen, onClose, onChartSelect }: CreateChartModalProps) {
+  const router = useRouter()
   const [selectedDataset, setSelectedDataset] = useState("")
   const [searchTerm, setSearchTerm] = useState("")
   const [selectedCategory, setSelectedCategory] = useState("All charts")
@@ -77,8 +79,22 @@ export default function CreateChartModal({ isOpen, onClose, onChartSelect }: Cre
   }
 
   const handleChartSelect = (chart: ChartType) => {
-    onChartSelect(chart)
-    onClose()
+    console.log('Chart selected:', chart.id, 'Dataset:', selectedDataset)
+    if (selectedDataset) {
+      const url = `/create-chart?dataset=${selectedDataset}&chartType=${chart.id}`
+      console.log('Navigating to:', url)
+      
+      // Close modal first
+      onClose()
+      
+      // Try direct window navigation
+      console.log('Using window.location.assign')
+      window.location.assign(url)
+    } else {
+      console.log('No dataset selected, calling onChartSelect')
+      onChartSelect(chart)
+      onClose()
+    }
   }
 
   return (
@@ -198,11 +214,11 @@ export default function CreateChartModal({ isOpen, onClose, onChartSelect }: Cre
                           <CardContent className="p-4">
                             <div className="space-y-3">
                               {/* Preview */}
-                              <div className="aspect-video bg-slate-50 dark:bg-slate-800 rounded-md overflow-hidden">
+                              <div className="aspect-video bg-white dark:bg-slate-900 rounded-md overflow-hidden border border-slate-200 dark:border-slate-700 p-2">
                                 <img 
                                   src={chart.preview} 
                                   alt={`${chart.name} preview`}
-                                  className="w-full h-full object-cover"
+                                  className="w-full h-full object-contain"
                                   onError={(e) => {
                                     // Fallback to a placeholder if image fails to load
                                     const target = e.target as HTMLImageElement;
