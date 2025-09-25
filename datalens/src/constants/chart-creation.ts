@@ -1,6 +1,7 @@
 export const METRICS = [
   { name: "AVG", type: "aggregate" },
   { name: "COUNT", type: "aggregate" },
+//   { name: "COUNT_DISTINCT", type: "aggregate" },
   { name: "MAX", type: "aggregate" },
   { name: "MIN", type: "aggregate" },
   { name: "SUM", type: "aggregate" }
