@@ -12,7 +12,7 @@ export default function CreateChartLayout({
   const router = useRouter()
 
   useEffect(() => {
-    const token = localStorage.getItem('accessToken')
+    const token = localStorage.getItem('token')
     if (!token) {
       router.push('/login')
       return

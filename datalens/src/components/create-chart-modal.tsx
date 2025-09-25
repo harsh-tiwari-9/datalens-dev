@@ -87,9 +87,8 @@ export default function CreateChartModal({ isOpen, onClose, onChartSelect }: Cre
       // Close modal first
       onClose()
       
-      // Try direct window navigation
-      console.log('Using window.location.assign')
-      window.location.assign(url)
+      // Use Next.js router for client-side navigation
+      router.push(url)
     } else {
       console.log('No dataset selected, calling onChartSelect')
       onChartSelect(chart)
