@@ -2,6 +2,7 @@
 
 import { useState, useEffect } from "react"
 import { useOnboardingApi } from "@/hooks/useApi"
+import { useRouter } from "next/navigation"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
@@ -56,6 +57,7 @@ interface Chart {
 // Mock data removed - will fetch from API
 
 export default function ChartsPage() {
+  const router = useRouter()
   const [charts, setCharts] = useState<Chart[]>([])
   const [selectedCharts, setSelectedCharts] = useState<string[]>([])
   const [viewMode, setViewMode] = useState<"list" | "grid">("list")
@@ -239,12 +241,34 @@ export default function ChartsPage() {
   const getChartTypeColor = (type: string) => {
     const colors: { [key: string]: string } = {
       "bar": "bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-300",
+      "bar-chart": "bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-300",
       "line": "bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-300",
+      "line-chart": "bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-300",
       "area": "bg-indigo-100 text-indigo-800 dark:bg-indigo-900 dark:text-indigo-300",
+      "area-chart": "bg-indigo-100 text-indigo-800 dark:bg-indigo-900 dark:text-indigo-300",
       "pie": "bg-purple-100 text-purple-800 dark:bg-purple-900 dark:text-purple-300",
-      "scatter": "bg-orange-100 text-orange-800 dark:bg-orange-900 dark:text-orange-300"
+      "pie-chart": "bg-purple-100 text-purple-800 dark:bg-purple-900 dark:text-purple-300",
+      "scatter": "bg-orange-100 text-orange-800 dark:bg-orange-900 dark:text-orange-300",
+      "scatter-chart": "bg-orange-100 text-orange-800 dark:bg-orange-900 dark:text-orange-300"
     }
     return colors[type] || "bg-gray-100 text-gray-800 dark:bg-gray-900 dark:text-gray-300"
+  }
+
+  const handleEditChart = (chart: Chart) => {
+    // Map chart types to the format expected by create chart page
+    const chartTypeMapping: { [key: string]: string } = {
+      "line": "line-chart",
+      "bar": "bar-chart", 
+      "area": "area-chart",
+      "pie": "pie-chart",
+      "scatter": "scatter-chart"
+    }
+    
+    const mappedChartType = chartTypeMapping[chart.chartType] || chart.chartType
+    
+    // Navigate to create chart page with edit mode
+    const editUrl = `/create-chart?edit=true&chartId=${chart.id}&chartName=${encodeURIComponent(chart.name)}&chartType=${mappedChartType}&query=${encodeURIComponent(chart.query || '')}`
+    router.push(editUrl)
   }
 
   return (
@@ -413,10 +437,15 @@ export default function ChartsPage() {
                     <SelectContent>
                       <SelectItem value="all">All chart types</SelectItem>
                       <SelectItem value="bar">Bar Chart</SelectItem>
+                      <SelectItem value="bar-chart">Bar Chart</SelectItem>
                       <SelectItem value="line">Line Chart</SelectItem>
+                      <SelectItem value="line-chart">Line Chart</SelectItem>
                       <SelectItem value="area">Area Chart</SelectItem>
+                      <SelectItem value="area-chart">Area Chart</SelectItem>
                       <SelectItem value="pie">Pie Chart</SelectItem>
+                      <SelectItem value="pie-chart">Pie Chart</SelectItem>
                       <SelectItem value="scatter">Scatter Plot</SelectItem>
+                      <SelectItem value="scatter-chart">Scatter Plot</SelectItem>
                     </SelectContent>
                   </Select>
                 </div>
@@ -505,7 +534,10 @@ export default function ChartsPage() {
                         </td>
                         <td className="p-4">
                           <Badge className={getChartTypeColor(chart.chartType)}>
-                            {chart.chartType.charAt(0).toUpperCase() + chart.chartType.slice(1)}
+                            {chart.chartType.includes('-') 
+                              ? chart.chartType.split('-').map(word => word.charAt(0).toUpperCase() + word.slice(1)).join(' ')
+                              : chart.chartType.charAt(0).toUpperCase() + chart.chartType.slice(1)
+                            }
                           </Badge>
                         </td>
                         <td className="p-4">
@@ -521,7 +553,7 @@ export default function ChartsPage() {
                               </Button>
                             </DropdownMenuTrigger>
                             <DropdownMenuContent align="end">
-                              <DropdownMenuItem>Edit</DropdownMenuItem>
+                              <DropdownMenuItem onClick={() => handleEditChart(chart)}>Edit</DropdownMenuItem>
                               <DropdownMenuItem>Duplicate</DropdownMenuItem>
                               <DropdownMenuItem>Export</DropdownMenuItem>
                               <DropdownMenuItem className="text-red-600">Delete</DropdownMenuItem>
@@ -560,12 +592,6 @@ export default function ChartsPage() {
       <CreateChartModal
         isOpen={isCreateModalOpen}
         onClose={() => setIsCreateModalOpen(false)}
-        onChartSelect={(chartType) => {
-          console.log('Selected chart type:', chartType)
-          // Handle chart creation logic here
-          // For now, just show a success message
-          alert(`Creating ${chartType.name} chart...`)
-        }}
       />
     </>
   )

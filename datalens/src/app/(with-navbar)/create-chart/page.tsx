@@ -1,15 +1,16 @@
 "use client"
 
-import { useState, useEffect } from "react"
+import { useState, useEffect, useRef, useMemo, useCallback } from "react"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Badge } from "@/components/ui/badge"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
-import { useIotAnalyticsApi } from "@/hooks/useApi"
+import { useIotAnalyticsApi, useOnboardingApi } from "@/hooks/useApi"
 import { useRouter, useSearchParams } from "next/navigation"
 import { ArrowLeft, Play, Save, MoreHorizontal, RefreshCw } from "lucide-react"
+import { toast } from "sonner"
 import { METRICS, DATASETS, Metric, Column } from "@/constants/chart-creation"
 import { ChartRenderer } from "@/components/charts/ChartRenderer"
 import { ChartData, ChartConfig } from "@/components/charts/types"
@@ -18,6 +19,7 @@ export default function CreateChartPage() {
   const router = useRouter()
   const searchParams = useSearchParams()
   const { request: apiRequest } = useIotAnalyticsApi()
+  const { request: onboardingRequest } = useOnboardingApi()
   
   console.log('CreateChartPage component rendered')
   
@@ -26,6 +28,10 @@ export default function CreateChartPage() {
   const [selectedDataset, setSelectedDataset] = useState("")
   const [selectedChartType, setSelectedChartType] = useState("")
   const [loading, setLoading] = useState(false)
+  const [saving, setSaving] = useState(false)
+  const [isEditMode, setIsEditMode] = useState(false)
+  const [editChartId, setEditChartId] = useState("")
+  const [editQuery, setEditQuery] = useState("")
   
   // Chart configuration
   const [xAxis, setXAxis] = useState("")
@@ -41,16 +47,82 @@ export default function CreateChartPage() {
   const [queryResult, setQueryResult] = useState<any[] | null>(null)
   const [draggedColumn, setDraggedColumn] = useState<string | null>(null)
   const [dragOverTarget, setDragOverTarget] = useState<string | null>(null)
+  
+  // Timer state
+  const [displayTime, setDisplayTime] = useState<string>("00:00:00.00")
+  const queryStartTimeRef = useRef<number | null>(null)
+  const timerIntervalRef = useRef<NodeJS.Timeout | null>(null)
+
+  // Memoized chart configuration to prevent re-renders
+  const chartConfig: ChartConfig = useMemo(() => ({
+    type: selectedChartType.toLowerCase(),
+    title: chartName || `${selectedChartType} Chart`,
+    subtitle: `Dataset: ${selectedDataset}`,
+    showLegend: true,
+    showGrid: true,
+    showTooltips: true,
+    theme: 'light'
+  }), [selectedChartType, chartName, selectedDataset])
 
   useEffect(() => {
     const dataset = searchParams.get('dataset')
     const chartType = searchParams.get('chartType')
+    const edit = searchParams.get('edit')
+    const chartId = searchParams.get('chartId')
+    const chartName = searchParams.get('chartName')
+    const query = searchParams.get('query')
+    const fromSqlLab = searchParams.get('fromSqlLab')
     
-    console.log('Create Chart Page - Dataset:', dataset, 'ChartType:', chartType)
+    console.log('Create Chart Page - Dataset:', dataset, 'ChartType:', chartType, 'Edit:', edit, 'FromSqlLab:', fromSqlLab)
     console.log('Current URL:', window.location.href)
     console.log('Search params:', searchParams.toString())
     
-    if (dataset && chartType) {
+    // Handle SQL Lab mode
+    if (fromSqlLab === 'true' && chartType && query) {
+      setIsEditMode(false)
+      setChartName(chartName ? decodeURIComponent(chartName) : '')
+      setSelectedChartType(chartType)
+      setEditQuery(decodeURIComponent(query))
+      
+      // Use the first available dataset as default for SQL Lab
+      const defaultDataset = DATASETS[0] || 'druid-test'
+      setSelectedDataset(defaultDataset)
+      fetchColumns(defaultDataset)
+      
+      // Auto-execute the query from SQL Lab
+      setTimeout(() => {
+        executeEditQuery(decodeURIComponent(query))
+      }, 1000)
+    }
+    // Handle edit mode
+    else if (edit === 'true' && chartId && chartName && chartType) {
+      setIsEditMode(true)
+      setEditChartId(chartId)
+      setChartName(decodeURIComponent(chartName))
+      setSelectedChartType(chartType)
+      if (query) {
+        setEditQuery(decodeURIComponent(query))
+      }
+      
+      // For edit mode, we need to determine the dataset from the query or use a default
+      // Since we don't have dataset in the URL for edit mode, we'll use the first available dataset
+      const defaultDataset = DATASETS[0] || 'druid-test'
+      setSelectedDataset(defaultDataset)
+      fetchColumns(defaultDataset)
+      
+      // Parse query and populate form fields in edit mode
+      if (query) {
+        parseQueryForEditMode(decodeURIComponent(query))
+      }
+      
+      // Auto-execute the query in edit mode
+      setTimeout(() => {
+        if (query) {
+          executeEditQuery(decodeURIComponent(query))
+        }
+      }, 1000)
+    } else if (dataset && chartType) {
+      setIsEditMode(false)
       setSelectedDataset(dataset)
       setSelectedChartType(chartType)
       fetchColumns(dataset)
@@ -59,6 +131,15 @@ export default function CreateChartPage() {
       router.push('/home')
     }
   }, [searchParams, router])
+
+  // Cleanup interval on unmount
+  useEffect(() => {
+    return () => {
+      if (timerIntervalRef.current) {
+        clearInterval(timerIntervalRef.current)
+      }
+    }
+  }, [])
 
   const fetchColumns = async (dataset: string) => {
     try {
@@ -78,6 +159,154 @@ export default function CreateChartPage() {
     }
   }
 
+  const parseQueryForEditMode = useCallback((query: string) => {
+    console.log('Parsing query for edit mode:', query)
+    
+    try {
+      // Extract SELECT columns
+      const selectMatch = query.match(/SELECT\s+(.*?)\s+FROM/i)
+      if (selectMatch) {
+        const selectClause = selectMatch[1]
+        const columns = selectClause.split(',').map(col => col.trim().replace(/"/g, ''))
+        
+        // Find time-based columns
+        const timeColumns = columns.filter(col => 
+          col.includes('__time') || 
+          col.includes('time_group') || 
+          col.includes('TIME_FLOOR')
+        )
+        
+        // Find metric columns (aggregations)
+        const metricColumns = columns.filter(col => 
+          col.includes('SUM(') || 
+          col.includes('COUNT(') || 
+          col.includes('AVG(') || 
+          col.includes('MAX(') || 
+          col.includes('MIN(') ||
+          col.includes('total') ||
+          col.includes('count')
+        )
+        
+        // Set X-axis to first time column or first column
+        if (timeColumns.length > 0) {
+          const timeCol = timeColumns[0].replace(/TIME_FLOOR\(([^,]+).*\)/i, '$1').replace(/"/g, '')
+          setXAxis(timeCol)
+        } else if (columns.length > 0) {
+          const firstCol = columns[0].replace(/TIME_FLOOR\(([^,]+).*\)/i, '$1').replace(/"/g, '')
+          setXAxis(firstCol)
+        }
+        
+        // Set dimensions (non-aggregated columns)
+        const dimensionColumns = columns.filter(col => 
+          !col.includes('SUM(') && 
+          !col.includes('COUNT(') && 
+          !col.includes('AVG(') && 
+          !col.includes('MAX(') && 
+          !col.includes('MIN(') &&
+          !col.includes('TIME_FLOOR')
+        ).map(col => col.replace(/"/g, ''))
+        
+        if (dimensionColumns.length > 0) {
+          setDimensions(dimensionColumns)
+        }
+        
+        // Set metrics based on aggregations found
+        const foundMetrics: string[] = []
+        if (columns.some(col => col.includes('COUNT('))) foundMetrics.push('COUNT')
+        if (columns.some(col => col.includes('SUM('))) foundMetrics.push('SUM')
+        if (columns.some(col => col.includes('AVG('))) foundMetrics.push('AVG')
+        if (columns.some(col => col.includes('MAX('))) foundMetrics.push('MAX')
+        if (columns.some(col => col.includes('MIN('))) foundMetrics.push('MIN')
+        
+        if (foundMetrics.length > 0) {
+          setMetrics(foundMetrics)
+        }
+        
+        console.log('Parsed query fields:', {
+          xAxis,
+          dimensions: dimensionColumns,
+          metrics: foundMetrics,
+          timeColumns,
+          metricColumns
+        })
+      }
+      
+      // Extract WHERE conditions for filters
+      const whereMatch = query.match(/WHERE\s+(.*?)(?:\s+GROUP\s+BY|\s+ORDER\s+BY|\s+LIMIT|$)/i)
+      if (whereMatch) {
+        const whereClause = whereMatch[1]
+        const filterColumns = whereClause.split('AND').map(condition => {
+          const match = condition.match(/"([^"]+)"/)
+          return match ? match[1] : null
+        }).filter((col): col is string => col !== null)
+        
+        if (filterColumns.length > 0) {
+          setFilters(filterColumns)
+        }
+      }
+      
+    } catch (error) {
+      console.error('Error parsing query:', error)
+    }
+  }, [])
+
+  const executeEditQuery = async (query: string) => {
+    try {
+      setLoading(true)
+      startStopwatch()
+      
+      console.log('Executing edit query:', query)
+      
+      const response = await apiRequest('/jviz/analytics/druid/query', {
+        method: 'POST',
+        body: { queryBody: query }
+      })
+      
+      console.log('Edit Query Response:', response)
+      
+      // Process the response data
+      let processedData: any[] = []
+      
+      if (response && typeof response === 'object') {
+        const data = response as any
+        if (Array.isArray(data)) {
+          processedData = data
+        } else if (data?.data && Array.isArray(data.data)) {
+          processedData = data.data
+        }
+      }
+      
+      // Performance optimization: Limit data size for UI
+      const maxDataPoints = 10000
+      if (processedData.length > maxDataPoints) {
+        console.warn(`Large dataset detected (${processedData.length} rows). Limiting to ${maxDataPoints} rows for performance.`)
+        processedData = processedData.slice(0, maxDataPoints)
+      }
+      
+      // Use requestAnimationFrame to prevent UI blocking
+      requestAnimationFrame(() => {
+        setQueryResult(processedData)
+        setChartData(processedData)
+        console.log(`Edit query executed successfully. ${processedData.length} rows processed.`)
+      })
+      
+      // Stop stopwatch
+      stopStopwatch()
+      console.log(`Edit query completed in ${displayTime}`)
+      
+    } catch (error) {
+      console.error('Error executing edit query:', error)
+      setQueryResult([])
+      setChartData(null)
+      
+      // Stop stopwatch even on error
+      stopStopwatch()
+      console.log(`Edit query failed after ${displayTime}`)
+    } finally {
+      setLoading(false)
+    }
+  }
+
   const handleDatasetChange = (newDataset: string) => {
     setSelectedDataset(newDataset)
     setColumns([]) // Clear existing columns
@@ -88,6 +317,12 @@ export default function CreateChartPage() {
   }
 
   const handleMetricToggle = (metric: string) => {
+    // Check if dimensions are selected before allowing metrics
+    if (dimensions.length === 0 && !metrics.includes(metric)) {
+      toast.error('Please select dimensions first before adding metrics')
+      return
+    }
+
     setMetrics(prev => {
       if (prev.includes(metric)) {
         // Remove metric and its column selection
@@ -97,8 +332,30 @@ export default function CreateChartPage() {
         setMetricColumns(newMetricColumns)
         return newMetrics
       } else {
-        // Add metric with default column selection
-        const defaultColumn = xAxis || (dimensions.length > 0 ? dimensions[0] : columns.length > 0 ? columns[0].name : 'id')
+        // Add metric with default column selection from dimensions
+        // Find the first non-string dimension for SUM/AVG metrics
+        let defaultColumn = dimensions.length > 0 ? dimensions[0] : (xAxis || 'id')
+        
+        if (metric === 'SUM' || metric === 'AVG') {
+          // For SUM/AVG, try to find a non-string dimension
+          const nonStringDimension = dimensions.find(dim => {
+            const columnInfo = columns.find(col => col.name === dim)
+            return columnInfo?.type !== 'string' && columnInfo?.type !== 'json'
+          })
+          
+          if (nonStringDimension) {
+            defaultColumn = nonStringDimension
+          } else {
+            // If no non-string dimension found, use the first dimension but show warning
+            const columnInfo = columns.find(col => col.name === defaultColumn)
+            const isStringColumn = columnInfo?.type === 'string' || columnInfo?.type === 'json'
+            
+            if (isStringColumn) {
+              toast.warning(`${metric} applied to string column "${defaultColumn}". Consider using COUNT, MAX, or MIN for better results.`)
+            }
+          }
+        }
+        
         setMetricColumns(prev => ({ ...prev, [metric]: defaultColumn }))
         return [...prev, metric]
       }
@@ -106,15 +363,52 @@ export default function CreateChartPage() {
   }
 
   const handleMetricColumnChange = (metric: string, column: string) => {
+    // Check if metric is compatible with the selected column
+    const columnInfo = columns.find(col => col.name === column)
+    const isStringColumn = columnInfo?.type === 'string' || columnInfo?.type === 'json'
+    
+    if (isStringColumn && (metric === 'SUM' || metric === 'AVG')) {
+      toast.warning(`${metric} applied to string column "${column}". Consider using COUNT, MAX, or MIN for better results.`)
+    }
+    
     setMetricColumns(prev => ({ ...prev, [metric]: column }))
   }
 
   const handleDimensionToggle = (column: string) => {
-    setDimensions(prev => 
-      prev.includes(column) 
-        ? prev.filter(d => d !== column)
-        : [...prev, column]
-    )
+    setDimensions(prev => {
+      const isAdding = !prev.includes(column)
+      const newDimensions = isAdding 
+        ? [...prev, column]
+        : prev.filter(d => d !== column)
+      
+      // If adding a dimension and no metrics exist, add a default metric
+      if (isAdding && metrics.length === 0) {
+        setMetrics(['COUNT'])
+        setMetricColumns(prev => ({ ...prev, 'COUNT': column }))
+      }
+      
+      // If removing a dimension, remove any metrics that were using that column
+      if (!isAdding) {
+        const metricsToRemove = Object.entries(metricColumns)
+          .filter(([_, col]) => col === column)
+          .map(([metric, _]) => metric)
+        
+        if (metricsToRemove.length > 0) {
+          setMetrics(prevMetrics => prevMetrics.filter(m => !metricsToRemove.includes(m)))
+          const newMetricColumns = { ...metricColumns }
+          metricsToRemove.forEach(metric => delete newMetricColumns[metric])
+          setMetricColumns(newMetricColumns)
+        }
+      }
+      
+      // If all dimensions are cleared, clear all metrics
+      if (newDimensions.length === 0) {
+        setMetrics([])
+        setMetricColumns({})
+      }
+      
+      return newDimensions
+    })
   }
 
   const handleFilterToggle = (column: string) => {
@@ -141,7 +435,17 @@ export default function CreateChartPage() {
       setXAxis(draggedColumn)
     } else if (target === 'dimensions') {
       if (!dimensions.includes(draggedColumn)) {
-        setDimensions(prev => [...prev, draggedColumn])
+        setDimensions(prev => {
+          const newDimensions = [...prev, draggedColumn]
+          
+          // If no metrics exist, add a default metric for this dimension
+          if (metrics.length === 0) {
+            setMetrics(['COUNT'])
+            setMetricColumns(prev => ({ ...prev, 'COUNT': draggedColumn }))
+          }
+          
+          return newDimensions
+        })
       }
     } else if (target === 'filters') {
       if (!filters.includes(draggedColumn)) {
@@ -160,34 +464,94 @@ export default function CreateChartPage() {
     setDragOverTarget(null)
   }
 
+  // Format time display
+  const formatTime = (milliseconds: number): string => {
+    const totalSeconds = Math.floor(milliseconds / 1000)
+    const ms = Math.floor((milliseconds % 1000) / 10) // Get centiseconds
+    const hours = Math.floor(totalSeconds / 3600)
+    const minutes = Math.floor((totalSeconds % 3600) / 60)
+    const seconds = totalSeconds % 60
+    
+    return `${hours.toString().padStart(2, '0')}:${minutes.toString().padStart(2, '0')}:${seconds.toString().padStart(2, '0')}.${ms.toString().padStart(2, '0')}`
+  }
+
+  // Start stopwatch
+  const startStopwatch = () => {
+    const startTime = Date.now()
+    queryStartTimeRef.current = startTime
+    setDisplayTime("00:00:00.00")
+    
+    // Clear any existing interval
+    if (timerIntervalRef.current) {
+      clearInterval(timerIntervalRef.current)
+    }
+    
+    // Update timer every 10ms for smooth display
+    timerIntervalRef.current = setInterval(() => {
+      const currentTime = Date.now()
+      const elapsed = currentTime - startTime
+      setDisplayTime(formatTime(elapsed))
+    }, 10)
+  }
+
+  // Stop stopwatch
+  const stopStopwatch = () => {
+    if (timerIntervalRef.current) {
+      clearInterval(timerIntervalRef.current)
+      timerIntervalRef.current = null
+    }
+  }
+
   const generateQuery = () => {
     let query = "SELECT "
     const selectParts: string[] = []
     
     // Add X-axis (if specified) - this is the primary dimension
     if (xAxis) {
-      selectParts.push(`"${xAxis}"`)
+      if (xAxis.includes('$')) {
+        // Handle JSON columns with JSON_VALUE
+        selectParts.push(`JSON_VALUE("ext", '${xAxis}') as ${xAxis.replace(/[\[\].]/g, '_')}`)
+      } else {
+        selectParts.push(`"${xAxis}"`)
+      }
     }
     
     // Add other dimensions (excluding x-axis to avoid duplication)
     const uniqueDimensions = dimensions.filter(d => d !== xAxis)
     if (uniqueDimensions.length > 0) {
-      selectParts.push(...uniqueDimensions.map(d => `"${d}"`))
+      selectParts.push(...uniqueDimensions.map(d => {
+        if (d.includes('$')) {
+          // Handle JSON columns with JSON_VALUE
+          return `JSON_VALUE("ext", '${d}') as ${d.replace(/[\[\].]/g, '_')}`
+        } else {
+          return `"${d}"`
+        }
+      }))
     }
     
-    // Add metrics - these need to reference actual columns
-    if (metrics.length > 0) {
+    // Add metrics - these need to reference actual columns and dimensions
+    if (metrics.length > 0 && dimensions.length > 0) {
       const metricExpressions = metrics.map(metric => {
         // For metrics, we need to specify which columns to aggregate
-        // For now, we'll use a generic approach, but in a real implementation,
-        // users should be able to select which columns to aggregate
+        // Use the metric column mapping to get the correct dimension column
         
         if (metric === "COUNT") {
           return "COUNT(*) as count_total"
         }
         
-        // For other metrics (SUM, AVG, MAX, MIN), use the selected column
-        const metricColumn = metricColumns[metric] || 'id'
+        // For other metrics (SUM, AVG, MAX, MIN), use the selected column from dimensions
+        const metricColumn = metricColumns[metric] || dimensions[0]
+        
+        // Check if the column is a string type (not suitable for numeric aggregation)
+        const columnInfo = columns.find(col => col.name === metricColumn)
+        const isStringColumn = columnInfo?.type === 'string' || columnInfo?.type === 'json'
+        
+        if (isStringColumn && (metric === 'SUM' || metric === 'AVG')) {
+          // For string columns, only allow COUNT, MAX, MIN
+          console.warn(`Cannot apply ${metric} to string column ${metricColumn}. Using COUNT instead.`)
+          toast.warning(`${metric} cannot be applied to string column "${metricColumn}". Using COUNT(*) instead.`)
+          return "COUNT(*) as count_total"
+        }
         
         // Handle JSON columns properly
         if (metricColumn.includes('$')) {
@@ -195,7 +559,15 @@ export default function CreateChartPage() {
           // The column name is the path (e.g., "$[0].astID" -> "$[0].astID")
           // We need to use the full path as it appears in the column name
           return `${metric}(CAST(JSON_VALUE("ext", '${metricColumn}') AS DOUBLE)) as ${metric.toLowerCase()}_total`
+        } else if (isStringColumn) {
+          // For string columns, only allow COUNT, MAX, MIN
+          if (metric === 'MAX' || metric === 'MIN') {
+            return `${metric}("${metricColumn}") as ${metric.toLowerCase()}_total`
+          } else {
+            return "COUNT(*) as count_total"
+          }
         } else {
+          // For numeric columns, allow all aggregations
           return `${metric}("${metricColumn}") as ${metric.toLowerCase()}_total`
         }
       })
@@ -232,8 +604,8 @@ export default function CreateChartPage() {
       query += " WHERE " + whereConditions.join(" AND ")
     }
     
-    // Add GROUP BY clause - only group by if we have aggregations AND grouping columns
-    if (metrics.length > 0) {
+    // Add GROUP BY clause - only group by if we have aggregations AND dimensions
+    if (metrics.length > 0 && dimensions.length > 0) {
       const groupByColumns = new Set<string>()
       
       // Add X-axis if it exists
@@ -241,8 +613,8 @@ export default function CreateChartPage() {
         groupByColumns.add(xAxis)
       }
       
-      // Add dimensions (excluding x-axis to avoid duplicates)
-      uniqueDimensions.forEach(d => {
+      // Add all dimensions (excluding x-axis to avoid duplicates)
+      dimensions.forEach(d => {
         if (d !== xAxis) {
           groupByColumns.add(d)
         }
@@ -250,7 +622,14 @@ export default function CreateChartPage() {
       
       // Only add GROUP BY if we have columns to group by
       if (groupByColumns.size > 0) {
-        const groupByList = Array.from(groupByColumns).map(col => `"${col}"`)
+        const groupByList = Array.from(groupByColumns).map(col => {
+          if (col.includes('$')) {
+            // Handle JSON columns in GROUP BY
+            return `JSON_VALUE("ext", '${col}')`
+          } else {
+            return `"${col}"`
+          }
+        })
         query += " GROUP BY " + groupByList.join(", ")
       }
     }
@@ -258,9 +637,18 @@ export default function CreateChartPage() {
     // Add ORDER BY clause - only if user has explicitly set sortBy
     if (sortBy) {
       if (xAxis) {
-        query += ` ORDER BY "${xAxis}" ASC`
+        if (xAxis.includes('$')) {
+          query += ` ORDER BY JSON_VALUE("ext", '${xAxis}') ASC`
+        } else {
+          query += ` ORDER BY "${xAxis}" ASC`
+        }
       } else if (uniqueDimensions.length > 0) {
-        query += ` ORDER BY "${uniqueDimensions[0]}" ASC`
+        const firstDim = uniqueDimensions[0]
+        if (firstDim.includes('$')) {
+          query += ` ORDER BY JSON_VALUE("ext", '${firstDim}') ASC`
+        } else {
+          query += ` ORDER BY "${firstDim}" ASC`
+        }
       }
     }
     
@@ -273,6 +661,8 @@ export default function CreateChartPage() {
   const handleCreateChart = async () => {
     try {
       setLoading(true)
+      startStopwatch()
+      
       const query = generateQuery()
       console.log('Generated Query:', query)
       
@@ -309,19 +699,71 @@ export default function CreateChartPage() {
         console.log(`Query executed successfully. ${processedData.length} rows processed.`)
       })
       
+      // Stop stopwatch
+      stopStopwatch()
+      console.log(`Query completed in ${displayTime}`)
+      
     } catch (error) {
       console.error('Error creating chart:', error)
       setQueryResult([])
       setChartData(null)
+      
+      // Stop stopwatch even on error
+      stopStopwatch()
+      console.log(`Query failed after ${displayTime}`)
     } finally {
       setLoading(false)
     }
   }
 
-  const isCreateButtonDisabled = !chartName || metrics.length === 0 || (metrics.some(m => m !== "COUNT" && !metricColumns[m]))
+  const isCreateButtonDisabled = !chartName || dimensions.length === 0 || metrics.length === 0 || (metrics.some(m => m !== "COUNT" && !metricColumns[m]))
+
+  // Save chart function
+  const handleSaveChart = async () => {
+    try {
+      setSaving(true)
+      
+      if (!chartName.trim()) {
+        toast.error('Please enter a chart name')
+        return
+      }
+
+      const query = isEditMode ? editQuery : generateQuery()
+      
+      const saveData = {
+        queryBody: {
+          name: chartName,
+          chartType: selectedChartType.toLowerCase(),
+          query: query
+        }
+      }
+
+      console.log('Saving chart with data:', saveData)
+      
+      const response = await onboardingRequest('/jviz/onboard/widget/druid/query?hqBpId=test', {
+        method: 'POST',
+        body: saveData
+      })
+      
+      console.log('Save chart response:', response)
+      
+      // Check if response is successful
+      if (response) {
+        toast.success(isEditMode ? 'Chart updated successfully!' : 'Chart saved successfully!')
+        // Redirect to charts page after successful save
+        router.push('/charts')
+      }
+      
+    } catch (error) {
+      console.error('Error saving chart:', error)
+      toast.error(isEditMode ? 'Failed to update chart. Please try again.' : 'Failed to save chart. Please try again.')
+    } finally {
+      setSaving(false)
+    }
+  }
 
   // Chart rendering logic
-  const renderChart = () => {
+  const renderChart = useCallback(() => {
     if (!chartData || !Array.isArray(chartData) || chartData.length === 0) {
       return null
     }
@@ -332,6 +774,48 @@ export default function CreateChartPage() {
     // Extract data for different chart types
     const getChartData = (): ChartData => {
       if (data.length === 0) return { labels: [], values: [] }
+
+      // Handle edit mode data structure
+      if (isEditMode) {
+        console.log('Edit mode data processing:', { data: data.slice(0, 2), isEditMode })
+        
+        // For edit mode, look for common time-based patterns
+        const timeColumns = ['time_group', '__time', 'time', 'timestamp']
+        const valueColumns = ['totaltest', 'total_count', 'count_total', 'sum_total', 'avg_total', 'max_total', 'min_total']
+        
+        const timeColumn = timeColumns.find(col => data[0].hasOwnProperty(col))
+        const valueColumn = valueColumns.find(col => data[0].hasOwnProperty(col)) || 
+                          Object.keys(data[0]).find(key => 
+                            key !== timeColumn && 
+                            typeof data[0][key] === 'number' && 
+                            !key.includes('_group')
+                          )
+        
+        console.log('Edit mode column detection:', { timeColumn, valueColumn, availableColumns: Object.keys(data[0]) })
+        
+        if (timeColumn && valueColumn) {
+          const labels = data.map(row => {
+            const timeValue = row[timeColumn]
+            if (timeValue && timeValue.includes('T')) {
+              const time = new Date(timeValue)
+              return time.toLocaleDateString() + ' ' + time.toLocaleTimeString()
+            }
+            return String(timeValue || 'Unknown')
+          })
+          const values = data.map(row => parseFloat(row[valueColumn]) || 0)
+          console.log('Edit mode processed data:', { labels: labels.slice(0, 3), values: values.slice(0, 3) })
+          return { labels, values }
+        }
+        
+        // Fallback for edit mode - use first two columns
+        const columns = Object.keys(data[0])
+        if (columns.length >= 2) {
+          const labels = data.map(row => String(row[columns[0]] || 'Unknown'))
+          const values = data.map(row => parseFloat(row[columns[1]]) || 0)
+          console.log('Edit mode fallback data:', { labels: labels.slice(0, 3), values: values.slice(0, 3) })
+          return { labels, values }
+        }
+      }
 
       // For time-based charts, use __time column
       if (xAxis && xAxis.includes('__time')) {
@@ -351,7 +835,13 @@ export default function CreateChartPage() {
 
       // For categorical charts, use x-axis or first dimension
       const labelColumn = xAxis || (dimensions.length > 0 ? dimensions[0] : Object.keys(data[0])[0])
-      const labels = data.map(row => String(row[labelColumn] || 'Unknown'))
+      
+      // Handle JSON column aliases in the data
+      const actualLabelColumn = labelColumn.includes('$') 
+        ? labelColumn.replace(/[\[\].]/g, '_') 
+        : labelColumn
+      
+      const labels = data.map(row => String(row[actualLabelColumn] || row[labelColumn] || 'Unknown'))
       const values = data.map(row => {
         const metricKey = Object.keys(row).find(key => 
           key.includes('_total') || key.includes('count')
@@ -362,15 +852,6 @@ export default function CreateChartPage() {
     }
 
     const processedChartData = getChartData()
-    const chartConfig: ChartConfig = {
-      type: chartType,
-      title: chartName || `${selectedChartType} Chart`,
-      subtitle: `Dataset: ${selectedDataset}`,
-      showLegend: true,
-      showGrid: true,
-      showTooltips: true,
-      theme: 'light'
-    }
     
     return (
       <ChartRenderer
@@ -385,7 +866,7 @@ export default function CreateChartPage() {
         }}
       />
     )
-  }
+  }, [chartData, selectedChartType, chartName, selectedDataset, isEditMode, xAxis, dimensions])
 
 
 
@@ -418,29 +899,43 @@ export default function CreateChartPage() {
           
           <div className="flex items-center gap-3">
             <div className="flex items-center gap-2 text-sm text-slate-500">
-              <div className="w-2 h-2 bg-green-500 rounded-full"></div>
-              <span>00:00:00.00</span>
+              <div className={`w-2 h-2 rounded-full ${loading ? 'bg-yellow-500 animate-pulse' : 'bg-green-500'}`}></div>
+              <span>{displayTime}</span>
             </div>
             <Button 
-              onClick={handleCreateChart}
+              onClick={isEditMode ? () => executeEditQuery(editQuery) : handleCreateChart}
               className="bg-indigo-600 hover:bg-indigo-700 text-white"
               size="sm"
             >
               {loading ? (
                 <div className="flex items-center gap-2">
                   <div className="w-3 h-3 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
-                  Creating...
+                  {isEditMode ? 'Executing...' : 'Creating...'}
                 </div>
               ) : (
                 <div className="flex items-center gap-2">
                   <Play className="size-4" />
-                  CREATE CHART
+                  {isEditMode ? 'EXECUTE QUERY' : 'CREATE CHART'}
                 </div>
               )}
             </Button>
-            <Button variant="outline" size="sm">
-              <Save className="size-4 mr-2" />
-              SAVE
+            <Button 
+              variant="outline" 
+              size="sm"
+              onClick={handleSaveChart}
+              disabled={saving || !chartName.trim()}
+            >
+              {saving ? (
+                <div className="flex items-center gap-2">
+                  <div className="w-3 h-3 border-2 border-slate-600 border-t-transparent rounded-full animate-spin"></div>
+                  {isEditMode ? 'Updating...' : 'Saving...'}
+                </div>
+              ) : (
+                <>
+                  <Save className="size-4 mr-2" />
+                  {isEditMode ? 'UPDATE CHART' : 'SAVE'}
+                </>
+              )}
             </Button>
             <Button variant="ghost" size="sm">
               <MoreHorizontal className="size-4" />
@@ -557,7 +1052,30 @@ export default function CreateChartPage() {
                       onClick={() => {
                         // Add to dimensions by default, or cycle through options
                         if (!dimensions.includes(column.name)) {
-                          setDimensions(prev => [...prev, column.name])
+                          setDimensions(prev => {
+                            const newDimensions = [...prev, column.name]
+                            
+                            // If no metrics exist, add a default metric for this dimension
+                            if (metrics.length === 0) {
+                              setMetrics(['COUNT'])
+                              setMetricColumns(prev => ({ ...prev, 'COUNT': column.name }))
+                            }
+                            
+                            return newDimensions
+                          })
+                        } else {
+                          // Remove from dimensions
+                          setDimensions(prev => {
+                            const newDimensions = prev.filter(d => d !== column.name)
+                            
+                            // If all dimensions are cleared, clear all metrics
+                            if (newDimensions.length === 0) {
+                              setMetrics([])
+                              setMetricColumns({})
+                            }
+                            
+                            return newDimensions
+                          })
                         }
                       }}
                     >
@@ -605,12 +1123,9 @@ export default function CreateChartPage() {
         </div>
 
         {/* Center Panel - Chart Configuration */}
-        <div className="w-72 bg-white dark:bg-slate-800 border-r border-slate-200 dark:border-slate-700 p-4 flex flex-col h-full">
+        <div className="w-84 bg-white dark:bg-slate-800 border-r border-slate-200 dark:border-slate-700 p-4 flex flex-col h-full">
           <div className="mb-6">
             <div className="flex items-center gap-2 mb-4">
-              <div className="w-6 h-6 bg-indigo-100 dark:bg-indigo-900 rounded flex items-center justify-center">
-                <span className="text-xs font-bold text-indigo-600">{selectedChartType}</span>
-              </div>
               <span className="font-medium">{selectedChartType}</span>
             </div>
           </div>
@@ -677,8 +1192,14 @@ export default function CreateChartPage() {
 
             {/* Metrics */}
             <div>
-              <Label className="text-sm font-medium mb-2 block">METRIC</Label>
-              <div className="border-2 border-dashed border-slate-300 dark:border-slate-600 rounded-lg p-4 min-h-[45px]">
+              <Label className="text-sm font-medium mb-2 block">
+                METRIC {dimensions.length === 0 && <span className="text-red-500 text-xs">(Select Dimension to add Metric)</span>}
+              </Label>
+              <div className={`border-2 border-dashed rounded-lg p-4 min-h-[45px] ${
+                dimensions.length === 0 
+                  ? 'border-red-300 dark:border-red-600 bg-red-50 dark:bg-red-900/20' 
+                  : 'border-slate-300 dark:border-slate-600'
+              }`}>
                 {metrics.length > 0 ? (
                   <div className="space-y-2">
                     {metrics.map((metric) => (
@@ -699,19 +1220,36 @@ export default function CreateChartPage() {
                               <SelectValue placeholder="Column" />
                             </SelectTrigger>
                             <SelectContent>
-                              {columns.map((column) => (
-                                <SelectItem key={column.name} value={column.name} className="text-xs">
-                                  {column.name}
+                              {dimensions
+                                .filter(dimension => {
+                                  // For SUM/AVG, filter out string columns
+                                  if (metric === 'SUM' || metric === 'AVG') {
+                                    const columnInfo = columns.find(col => col.name === dimension)
+                                    return columnInfo?.type !== 'string' && columnInfo?.type !== 'json'
+                                  }
+                                  return true
+                                })
+                                .map((dimension) => (
+                                <SelectItem key={dimension} value={dimension} className="text-xs">
+                                  {dimension}
                                 </SelectItem>
                               ))}
                             </SelectContent>
                           </Select>
                         )}
+                        <span className="text-xs text-slate-500">
+                          on {metricColumns[metric] || 'dimension'}
+                        </span>
                       </div>
                     ))}
                   </div>
                 ) : (
-                  <span className="text-slate-500">+ Drop a column/metric here or click</span>
+                  <span className="text-slate-500">
+                    {dimensions.length === 0 
+                      ? 'Select dimensions first to add metrics' 
+                      : '+ Drop a column/metric here or click'
+                    }
+                  </span>
                 )}
               </div>
             </div>
@@ -810,9 +1348,14 @@ export default function CreateChartPage() {
             ) : (
               <div className="bg-slate-50 dark:bg-slate-700 rounded-lg p-4 flex-1 flex items-center justify-center">
                 <div className="text-center">
-                  <div className="text-sm font-medium mb-1">Add required control values to preview chart</div>
+                  <div className="text-sm font-medium mb-1">
+                    {isEditMode ? 'Chart preview will appear here' : 'Add required control values to preview chart'}
+                  </div>
                   <div className="text-xs text-slate-500">
-                    Select values in highlighted field(s) in the control panel. Then run the query by clicking on the "Create chart" button.
+                    {isEditMode 
+                      ? 'Click "Execute Query" to run the chart query and see the preview.'
+                      : 'Select values in highlighted field(s) in the control panel. Then run the query by clicking on the "Create chart" button.'
+                    }
                   </div>
                 </div>
               </div>
@@ -821,10 +1364,10 @@ export default function CreateChartPage() {
 
           {/* Query Preview */}
           <div className="mt-4">
-            <div className="text-sm font-medium mb-2">Generated Query</div>
+            <div className="text-sm font-medium mb-2">{isEditMode ? 'Chart Query' : 'Generated Query'}</div>
             <div className="bg-slate-50 dark:bg-slate-700 rounded-lg p-3 max-h-32 overflow-y-auto">
               <pre className="text-xs text-slate-600 dark:text-slate-400 whitespace-pre-wrap">
-                {generateQuery()}
+                {isEditMode ? editQuery : generateQuery()}
               </pre>
             </div>
           </div>

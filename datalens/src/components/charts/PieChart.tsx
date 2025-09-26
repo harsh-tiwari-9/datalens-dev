@@ -1,15 +1,15 @@
 "use client"
 
-import React from 'react'
-import { PieChart as PieChartIcon } from 'lucide-react'
+import React, { useMemo } from 'react'
+import ReactECharts from 'echarts-for-react'
 import { ChartProps } from './types'
 
 interface PieChartProps extends ChartProps {
   showLegend?: boolean
-  showCenterValue?: boolean
-  maxSlices?: number
+  showPercentage?: boolean
+  showLabel?: boolean
   innerRadius?: number
-  outerRadius?: number
+  maxSlices?: number
 }
 
 export const PieChart: React.FC<PieChartProps> = ({
@@ -17,173 +17,235 @@ export const PieChart: React.FC<PieChartProps> = ({
   config = {},
   className = '',
   showLegend = true,
-  showCenterValue = true,
-  maxSlices = 8,
-  innerRadius = 15,
-  outerRadius = 35,
+  showPercentage = true,
+  showLabel = true,
+  innerRadius = 0,
+  maxSlices = 10,
   onDataPointClick,
   onDataPointHover
 }) => {
   const { labels, values, metadata } = data
   const { title, subtitle, theme = 'light' } = config
-  
-  const total = values.reduce((sum, val) => sum + val, 0)
-  if (total === 0) return <div className="text-center text-slate-500">No data</div>
 
-  // Limit slices for better visualization
-  const displayData = {
-    labels: labels.slice(0, maxSlices),
-    values: values.slice(0, maxSlices)
+  // Optimize data for performance
+  const optimizedData = useMemo(() => {
+    if (values.length > maxSlices) {
+      console.warn(`Large dataset detected (${values.length} slices). Limiting to ${maxSlices} slices for performance.`)
+      
+      // Sort by value and take top N
+      const sortedData = labels.map((label, index) => ({
+        label,
+        value: values[index]
+      })).sort((a, b) => b.value - a.value)
+      
+      const topData = sortedData.slice(0, maxSlices - 1)
+      const othersValue = sortedData.slice(maxSlices - 1).reduce((sum, item) => sum + item.value, 0)
+      
+      if (othersValue > 0) {
+        topData.push({ label: 'Others', value: othersValue })
+      }
+      
+      return {
+        labels: topData.map(item => item.label),
+        values: topData.map(item => item.value)
+      }
+    }
+    
+    return { labels, values }
+  }, [labels, values, maxSlices])
+
+  // Calculate statistics
+  const stats = useMemo(() => {
+    const total = optimizedData.values.reduce((sum, val) => sum + val, 0)
+    const maxValue = Math.max(...optimizedData.values)
+    const minValue = Math.min(...optimizedData.values)
+    const avgValue = total / optimizedData.values.length
+    
+    return { total, maxValue, minValue, avgValue }
+  }, [optimizedData.values])
+
+  // Generate colors
+  const colors = useMemo(() => {
+    const colorPalette = [
+      '#4f46e5', '#06b6d4', '#10b981', '#f59e0b', '#ef4444',
+      '#8b5cf6', '#ec4899', '#14b8a6', '#f97316', '#84cc16'
+    ]
+    
+    return optimizedData.labels.map((_, index) => 
+      colorPalette[index % colorPalette.length]
+    )
+  }, [optimizedData.labels])
+
+  // ECharts configuration
+  const option = useMemo(() => {
+    return {
+      title: {
+        text: title || 'Pie Chart',
+        subtext: subtitle,
+        left: 'center',
+        textStyle: {
+          fontSize: 16,
+          fontWeight: 'bold',
+          color: theme === 'dark' ? '#ffffff' : '#333333'
+        },
+        subtextStyle: {
+          fontSize: 12,
+          color: theme === 'dark' ? '#cccccc' : '#666666'
+        }
+      },
+      tooltip: {
+        trigger: 'item',
+        backgroundColor: theme === 'dark' ? 'rgba(0, 0, 0, 0.8)' : 'rgba(255, 255, 255, 0.9)',
+        borderColor: theme === 'dark' ? '#333' : '#ccc',
+        textStyle: {
+          color: theme === 'dark' ? '#fff' : '#333'
+        },
+        formatter: (params: any) => {
+          const percentage = ((params.value / stats.total) * 100).toFixed(1)
+          return `
+            <div style="padding: 8px;">
+              <div style="font-weight: bold; margin-bottom: 4px;">${params.name}</div>
+              <div style="color: #4f46e5; font-size: 18px; font-weight: bold;">${params.value.toLocaleString()}</div>
+              <div style="color: #666; font-size: 12px; margin-top: 4px;">
+                ${percentage}% of total
+              </div>
+            </div>
+          `
+        }
+      },
+      legend: showLegend ? {
+        orient: 'vertical',
+        left: 'left',
+        top: 'middle',
+        textStyle: {
+          color: theme === 'dark' ? '#ccc' : '#666'
+        },
+        formatter: (name: string) => {
+          const index = optimizedData.labels.indexOf(name)
+          const value = optimizedData.values[index]
+          const percentage = ((value / stats.total) * 100).toFixed(1)
+          return `${name} (${percentage}%)`
+        }
+      } : undefined,
+      series: [
+        {
+          name: 'Data',
+          type: 'pie',
+          radius: [`${innerRadius * 50}%`, '70%'],
+          center: ['50%', '50%'],
+          data: optimizedData.labels.map((label, index) => ({
+            name: label,
+            value: optimizedData.values[index]
+          })),
+          itemStyle: {
+            borderRadius: 4,
+            borderColor: '#fff',
+            borderWidth: 2
+          },
+          label: showLabel ? {
+            show: true,
+            formatter: (params: any) => {
+              if (showPercentage) {
+                const percentage = ((params.value / stats.total) * 100).toFixed(1)
+                return `${params.name}\n${percentage}%`
+              }
+              return params.name
+            },
+            fontSize: 12,
+            color: theme === 'dark' ? '#fff' : '#333'
+          } : { show: false },
+          labelLine: {
+            show: true,
+            length: 10,
+            length2: 5
+          },
+          emphasis: {
+            focus: 'self',
+            itemStyle: {
+              shadowBlur: 10,
+              shadowOffsetX: 0,
+              shadowColor: 'rgba(0, 0, 0, 0.5)'
+            }
+          },
+          animationType: 'scale',
+          animationEasing: 'elasticOut',
+          animationDelay: (idx: number) => idx * 100
+        }
+      ],
+      color: colors,
+      animation: true,
+      animationDuration: 1000,
+      animationEasing: 'cubicOut',
+      backgroundColor: 'transparent'
+    }
+  }, [optimizedData, title, subtitle, theme, showLegend, showLabel, showPercentage, innerRadius, colors, stats.total])
+
+  // Event handlers
+  const onChartClick = (params: any) => {
+    if (onDataPointClick) {
+      onDataPointClick(
+        { 
+          label: params.name, 
+          value: params.value 
+        }, 
+        optimizedData.labels.indexOf(params.name)
+      )
+    }
   }
-  
-  const colors = [
-    'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
-    'linear-gradient(135deg, #f093fb 0%, #f5576c 100%)',
-    'linear-gradient(135deg, #4facfe 0%, #00f2fe 100%)',
-    'linear-gradient(135deg, #43e97b 0%, #38f9d7 100%)',
-    'linear-gradient(135deg, #fa709a 0%, #fee140 100%)',
-    'linear-gradient(135deg, #a8edea 0%, #fed6e3 100%)',
-    'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
-    'linear-gradient(135deg, #f093fb 0%, #f5576c 100%)'
-  ]
 
-  let cumulativePercentage = 0
+  const onChartMouseOver = (params: any) => {
+    if (onDataPointHover) {
+      onDataPointHover(
+        { 
+          label: params.name, 
+          value: params.value 
+        }, 
+        optimizedData.labels.indexOf(params.name)
+      )
+    }
+  }
 
   return (
-    <div className={`space-y-4 ${className}`}>
-      {/* Header */}
-      <div className="flex items-center justify-between">
-        <div className="flex items-center gap-3">
-          <div className="w-8 h-8 bg-gradient-to-br from-pink-500 to-rose-600 rounded-lg flex items-center justify-center">
-            <PieChartIcon className="size-4 text-white" />
+    <div className={`w-full h-full ${className}`}>
+      {/* Statistics Cards */}
+      <div className="grid grid-cols-4 gap-4 mb-6">
+        <div className="bg-gradient-to-r from-indigo-50 to-indigo-100 dark:from-indigo-900/20 dark:to-indigo-800/20 rounded-lg p-4">
+          <div className="text-2xl font-bold text-indigo-600 dark:text-indigo-400">
+            {stats.total.toLocaleString()}
           </div>
-          <div>
-            {title && <h3 className="font-semibold text-slate-900 dark:text-slate-100">{title}</h3>}
-            {subtitle && <p className="text-xs text-slate-500">{subtitle}</p>}
-            {!title && <h3 className="font-semibold text-slate-900 dark:text-slate-100">Distribution Analysis</h3>}
-            <p className="text-xs text-slate-500">Total: {total.toLocaleString()} records</p>
-          </div>
+          <div className="text-xs text-slate-500">Total</div>
         </div>
-        <div className="text-right">
-          <div className="text-2xl font-bold text-pink-600">{displayData.labels.length}</div>
-          <div className="text-xs text-slate-500">Categories</div>
+        <div className="bg-gradient-to-r from-emerald-50 to-emerald-100 dark:from-emerald-900/20 dark:to-emerald-800/20 rounded-lg p-4">
+          <div className="text-2xl font-bold text-emerald-600 dark:text-emerald-400">
+            {stats.avgValue.toFixed(1)}
+          </div>
+          <div className="text-xs text-slate-500">Average</div>
+        </div>
+        <div className="bg-gradient-to-r from-blue-50 to-blue-100 dark:from-blue-900/20 dark:to-blue-800/20 rounded-lg p-4">
+          <div className="text-2xl font-bold text-blue-600 dark:text-blue-400">
+            {stats.maxValue.toLocaleString()}
+          </div>
+          <div className="text-xs text-slate-500">Largest</div>
+        </div>
+        <div className="bg-gradient-to-r from-purple-50 to-purple-100 dark:from-purple-900/20 dark:to-purple-800/20 rounded-lg p-4">
+          <div className="text-2xl font-bold text-purple-600 dark:text-purple-400">
+            {optimizedData.values.length}
+          </div>
+          <div className="text-xs text-slate-500">Slices</div>
         </div>
       </div>
-      
-      <div className="flex items-start gap-6">
-        {/* Pie Chart */}
-        <div className="flex items-center justify-center">
-          <div className="relative w-32 h-32">
-            <svg className="w-32 h-32 transform -rotate-90 drop-shadow-lg" viewBox="0 0 100 100">
-              <defs>
-                {colors.map((color, index) => (
-                  <linearGradient key={index} id={`gradient-${index}`} x1="0%" y1="0%" x2="100%" y2="100%">
-                    <stop offset="0%" stopColor={color.split(' ')[2]} stopOpacity="0.8"/>
-                    <stop offset="100%" stopColor={color.split(' ')[5]} stopOpacity="0.6"/>
-                  </linearGradient>
-                ))}
-                <filter id="pieGlow">
-                  <feGaussianBlur stdDeviation="2" result="coloredBlur"/>
-                  <feMerge> 
-                    <feMergeNode in="coloredBlur"/>
-                    <feMergeNode in="SourceGraphic"/>
-                  </feMerge>
-                </filter>
-              </defs>
-              
-              {displayData.values.map((value, index) => {
-                const percentage = (value / total) * 100
-                const startAngle = cumulativePercentage * 3.6
-                const endAngle = (cumulativePercentage + percentage) * 3.6
-                cumulativePercentage += percentage
 
-                const x1 = 50 + outerRadius * Math.cos((startAngle * Math.PI) / 180)
-                const y1 = 50 + outerRadius * Math.sin((startAngle * Math.PI) / 180)
-                const x2 = 50 + outerRadius * Math.cos((endAngle * Math.PI) / 180)
-                const y2 = 50 + outerRadius * Math.sin((endAngle * Math.PI) / 180)
-                const largeArcFlag = percentage > 50 ? 1 : 0
-
-                const pathData = [
-                  `M 50 50`,
-                  `L ${x1} ${y1}`,
-                  `A ${outerRadius} ${outerRadius} 0 ${largeArcFlag} 1 ${x2} ${y2}`,
-                  `Z`
-                ].join(' ')
-
-                return (
-                  <path
-                    key={index}
-                    d={pathData}
-                    fill={`url(#gradient-${index % colors.length})`}
-                    filter="url(#pieGlow)"
-                    className="hover:opacity-80 transition-opacity duration-200 cursor-pointer"
-                    style={{ animationDelay: `${index * 100}ms` }}
-                    onClick={() => onDataPointClick?.({ label: displayData.labels[index], value }, index)}
-                    onMouseEnter={() => onDataPointHover?.({ label: displayData.labels[index], value }, index)}
-                  />
-                )
-              })}
-              
-              {/* Center circle */}
-              <circle
-                cx="50"
-                cy="50"
-                r={innerRadius}
-                fill="white"
-                className="drop-shadow-md"
-              />
-              {showCenterValue && (
-                <text
-                  x="50"
-                  y="50"
-                  textAnchor="middle"
-                  dominantBaseline="middle"
-                  className="text-xs font-bold fill-slate-700"
-                >
-                  {total > 1000 ? `${(total/1000).toFixed(1)}k` : total}
-                </text>
-              )}
-            </svg>
-          </div>
-        </div>
-        
-        {/* Legend */}
-        {showLegend && (
-          <div className="space-y-2 flex-1">
-            {displayData.labels.map((label, index) => {
-              const value = displayData.values[index]
-              const percentage = (value / total) * 100
-              return (
-                <div 
-                  key={index} 
-                  className="flex items-center justify-between p-2 bg-slate-50 dark:bg-slate-800 rounded-lg hover:bg-slate-100 dark:hover:bg-slate-700 transition-colors cursor-pointer"
-                  onClick={() => onDataPointClick?.({ label, value }, index)}
-                  onMouseEnter={() => onDataPointHover?.({ label, value }, index)}
-                >
-                  <div className="flex items-center gap-3">
-                    <div 
-                      className="w-4 h-4 rounded-full shadow-sm" 
-                      style={{ 
-                        background: `linear-gradient(135deg, ${colors[index % colors.length].split(' ')[2]} 0%, ${colors[index % colors.length].split(' ')[5]} 100%)`
-                      }}
-                    />
-                    <span className="text-sm font-medium text-slate-700 dark:text-slate-300 truncate max-w-32">
-                      {label}
-                    </span>
-                  </div>
-                  <div className="text-right">
-                    <div className="text-sm font-bold text-slate-900 dark:text-slate-100">
-                      {value.toLocaleString()}
-                    </div>
-                    <div className="text-xs text-slate-500">
-                      {percentage.toFixed(1)}%
-                    </div>
-                  </div>
-                </div>
-              )
-            })}
-          </div>
-        )}
+      {/* ECharts Container */}
+      <div className="bg-white dark:bg-slate-800 rounded-xl border border-slate-200 dark:border-slate-700 p-4">
+        <ReactECharts
+          option={option}
+          style={{ height: '400px', width: '100%' }}
+          onEvents={{
+            click: onChartClick,
+            mouseover: onChartMouseOver
+          }}
+          opts={{ renderer: 'canvas' }} // Use canvas for better performance
+        />
       </div>
     </div>
   )

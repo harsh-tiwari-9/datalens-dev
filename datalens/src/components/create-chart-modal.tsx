@@ -49,10 +49,12 @@ import { CHART_TYPES, CATEGORIES, DATASETS, type ChartType } from "@/constants/c
 interface CreateChartModalProps {
   isOpen: boolean
   onClose: () => void
-  onChartSelect: (chartType: ChartType) => void
+  onChartSelect?: (chartType: ChartType) => void
+  suggestedChartType?: string | null
+  dataPreview?: any[]
 }
 
-export default function CreateChartModal({ isOpen, onClose, onChartSelect }: CreateChartModalProps) {
+export default function CreateChartModal({ isOpen, onClose, onChartSelect, suggestedChartType, dataPreview }: CreateChartModalProps) {
   const router = useRouter()
   const [selectedDataset, setSelectedDataset] = useState("")
   const [searchTerm, setSearchTerm] = useState("")
@@ -82,7 +84,7 @@ export default function CreateChartModal({ isOpen, onClose, onChartSelect }: Cre
     console.log('Chart selected:', chart.id, 'Dataset:', selectedDataset)
     if (selectedDataset) {
       const url = `/create-chart?dataset=${selectedDataset}&chartType=${chart.id}`
-      console.log('Navigating to:', url)
+      // console.log('Navigating to:', url)
       
       // Close modal first
       onClose()
@@ -91,8 +93,7 @@ export default function CreateChartModal({ isOpen, onClose, onChartSelect }: Cre
       router.push(url)
     } else {
       console.log('No dataset selected, calling onChartSelect')
-      onChartSelect(chart)
-      onClose()
+      onChartSelect?.(chart)
     }
   }
 
@@ -161,10 +162,67 @@ export default function CreateChartModal({ isOpen, onClose, onChartSelect }: Cre
             {/* Main Content */}
             <div className="flex-1 p-8 overflow-y-auto">
               <div className="space-y-8">
+                {/* Data Preview Section (only show if coming from SQL Lab) */}
+                {dataPreview && dataPreview.length > 0 && (
+                  <div>
+                    <h3 className="text-lg font-semibold text-slate-900 dark:text-slate-100 mb-4">
+                      Data Preview
+                    </h3>
+                    <div className="bg-slate-50 dark:bg-slate-800 rounded-lg p-4 mb-6">
+                      <div className="text-sm text-slate-600 dark:text-slate-400 mb-2">
+                        {dataPreview.length} rows of data from your query
+                      </div>
+                      <div className="max-h-32 overflow-auto">
+                        <table className="w-full text-xs">
+                          <thead>
+                            <tr className="border-b">
+                              {Object.keys(dataPreview[0]).map((col) => (
+                                <th key={col} className="text-left p-1 font-medium">{col}</th>
+                              ))}
+                            </tr>
+                          </thead>
+                          <tbody>
+                            {dataPreview.slice(0, 3).map((row, idx) => (
+                              <tr key={idx} className="border-b">
+                                {Object.values(row).map((value, colIdx) => (
+                                  <td key={colIdx} className="p-1 text-slate-600 dark:text-slate-400">
+                                    {String(value).length > 20 ? String(value).substring(0, 20) + '...' : String(value)}
+                                  </td>
+                                ))}
+                              </tr>
+                            ))}
+                          </tbody>
+                        </table>
+                      </div>
+                    </div>
+                  </div>
+                )}
+
+                {/* Suggested Chart Type */}
+                {suggestedChartType && (
+                  <div>
+                    <h3 className="text-lg font-semibold text-slate-900 dark:text-slate-100 mb-4">
+                      Recommended Chart Type
+                    </h3>
+                    <div className="bg-indigo-50 dark:bg-indigo-900/20 rounded-lg p-4 mb-6">
+                      <div className="flex items-center gap-2 mb-2">
+                        <BarChart3 className="size-4 text-indigo-600" />
+                        <span className="font-medium text-indigo-900 dark:text-indigo-100">
+                          Based on your data, we recommend:
+                        </span>
+                      </div>
+                      <div className="text-sm text-indigo-700 dark:text-indigo-300">
+                        {CHART_TYPES.find(chart => chart.id === suggestedChartType)?.name || 'Bar Chart'} - 
+                        {CHART_TYPES.find(chart => chart.id === suggestedChartType)?.description || 'Best suited for your data structure'}
+                      </div>
+                    </div>
+                  </div>
+                )}
+
                 {/* Step 1: Choose Dataset */}
                 <div>
                   <h3 className="text-lg font-semibold text-slate-900 dark:text-slate-100 mb-4">
-                    1 Choose a dataset
+                    {dataPreview ? '2' : '1'} Choose a dataset
                   </h3>
                   <div className="flex items-center gap-4">
                     <div className="flex-1">
@@ -187,7 +245,7 @@ export default function CreateChartModal({ isOpen, onClose, onChartSelect }: Cre
                 {/* Step 2: Choose Chart Type */}
                 <div>
                   <h3 className="text-lg font-semibold text-slate-900 dark:text-slate-100 mb-4">
-                    2 Choose chart type
+                    {dataPreview ? '3' : '2'} Choose chart type
                   </h3>
                   
                   {/* Search */}
@@ -207,7 +265,11 @@ export default function CreateChartModal({ isOpen, onClose, onChartSelect }: Cre
                       {filteredCharts.map((chart) => (
                         <Card 
                           key={chart.id}
-                          className="cursor-pointer hover:shadow-md transition-shadow border-slate-200 dark:border-slate-700"
+                          className={`cursor-pointer hover:shadow-md transition-shadow ${
+                            suggestedChartType === chart.id 
+                              ? 'border-indigo-500 bg-indigo-50 dark:bg-indigo-900/20' 
+                              : 'border-slate-200 dark:border-slate-700'
+                          }`}
                           onClick={() => handleChartSelect(chart)}
                         >
                           <CardContent className="p-4">
@@ -240,6 +302,11 @@ export default function CreateChartModal({ isOpen, onClose, onChartSelect }: Cre
                                   <h4 className="font-medium text-slate-900 dark:text-slate-100 text-sm">
                                     {chart.name}
                                   </h4>
+                                  {suggestedChartType === chart.id && (
+                                    <Badge className="text-xs bg-indigo-100 text-indigo-700 dark:bg-indigo-900 dark:text-indigo-300">
+                                      RECOMMENDED
+                                    </Badge>
+                                  )}
                                   {chart.deprecated && (
                                     <Badge variant="destructive" className="text-xs">
                                       DEPRECATED

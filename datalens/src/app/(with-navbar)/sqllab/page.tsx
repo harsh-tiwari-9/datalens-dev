@@ -8,6 +8,8 @@ import dynamic from "next/dynamic"
 import { useEffect, useState } from "react"
 import { useIotAnalyticsApi } from "@/hooks/useApi"
 import { toast } from "sonner"
+import CreateChartModal from "@/components/create-chart-modal"
+import { ChartType } from "@/constants/chart-types"
 
 const MonacoEditor = dynamic(() => import("@monaco-editor/react"), { ssr: false })
 
@@ -23,6 +25,7 @@ export default function SqlLabPage() {
   const [query, setQuery] = useState("");
   const [results, setResults] = useState<any[]>([])
   const [resultColumns, setResultColumns] = useState<string[]>([])
+  const [showChartModal, setShowChartModal] = useState(false)
   const iotApi = useIotAnalyticsApi()
 
   useEffect(() => {
@@ -178,8 +181,54 @@ export default function SqlLabPage() {
   const createChart = () => {
     if (results.length === 0) return
     
-    toast.info("Chart creation feature coming soon!")
-    // TODO: Implement chart creation functionality
+    setShowChartModal(true)
+  }
+
+  const analyzeDataForChartType = (data: any[], columns: string[]) => {
+    if (data.length === 0) return null
+    
+    const sampleRow = data[0]
+    const numericColumns = columns.filter(col => {
+      const value = sampleRow[col]
+      return typeof value === 'number' || !isNaN(Number(value))
+    })
+    
+    const textColumns = columns.filter(col => {
+      const value = sampleRow[col]
+      return typeof value === 'string' && isNaN(Number(value))
+    })
+    
+    const dateColumns = columns.filter(col => {
+      const value = sampleRow[col]
+      return value && (value.includes('T') || value.includes('-') || value.includes('/'))
+    })
+    
+    // Suggest chart types based on data characteristics
+    if (numericColumns.length === 1 && textColumns.length >= 1) {
+      return 'bar-chart' // Single metric, categorical data
+    } else if (numericColumns.length >= 2 && textColumns.length >= 1) {
+      return 'line-chart' // Multiple metrics, categorical data
+    } else if (numericColumns.length === 2) {
+      return 'scatter-plot' // Two numeric variables
+    } else if (textColumns.length >= 1 && numericColumns.length === 1) {
+      return 'pie-chart' // Categorical with single metric
+    } else if (dateColumns.length >= 1 && numericColumns.length >= 1) {
+      return 'line-chart' // Time series data
+    }
+    
+    return 'bar-chart' // Default fallback
+  }
+
+  const handleChartSelect = (chartType: ChartType) => {
+    if (results.length === 0) return
+    
+    // Navigate to create-chart page with the query results as data
+    const queryParam = encodeURIComponent(query)
+    const chartName = `${chartType.name} from SQL Lab`
+    
+    // Create a URL with the chart type and query data
+    const url = `/create-chart?chartType=${chartType.id}&chartName=${encodeURIComponent(chartName)}&query=${queryParam}&fromSqlLab=true`
+    window.location.href = url
   }
 
   return (
@@ -314,10 +363,10 @@ export default function SqlLabPage() {
                     </Button>
                   </>
                 )}
-                <div className="flex items-center gap-1">
+                {/* <div className="flex items-center gap-1">
                   <Button size="icon" variant="ghost"><Filter className="size-4" /></Button>
                   <Button size="icon" variant="ghost"><List className="size-4" /></Button>
-                </div>
+                </div> */}
               </div>
             </CardHeader>
             <CardContent>
@@ -361,6 +410,15 @@ export default function SqlLabPage() {
           </Card>
         </section>
       </div>
+      
+      {/* Chart Creation Modal */}
+      <CreateChartModal
+        isOpen={showChartModal}
+        onClose={() => setShowChartModal(false)}
+        onChartSelect={handleChartSelect}
+        suggestedChartType={analyzeDataForChartType(results, resultColumns)}
+        dataPreview={results.slice(0, 5)} // Show first 5 rows as preview
+      />
     </>
   )
 }
