@@ -9,7 +9,8 @@ export const METRICS = [
 
 export const DATASETS = [
   "light_table",
-  "druid-test"
+  "druid-test",
+  "digi_table"
 ]
 
 export interface Metric {

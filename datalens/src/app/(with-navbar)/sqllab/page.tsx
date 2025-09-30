@@ -10,7 +10,7 @@ import { useIotAnalyticsApi } from "@/hooks/useApi"
 import { toast } from "sonner"
 import CreateChartModal from "@/components/create-chart-modal"
 import { ChartType } from "@/constants/chart-types"
-
+import { DATASETS } from "@/constants/chart-creation"
 const MonacoEditor = dynamic(() => import("@monaco-editor/react"), { ssr: false })
 
 interface Column {
@@ -27,6 +27,7 @@ export default function SqlLabPage() {
   const [resultColumns, setResultColumns] = useState<string[]>([])
   const [showChartModal, setShowChartModal] = useState(false)
   const iotApi = useIotAnalyticsApi()
+  const getColumnsApi = useIotAnalyticsApi()
 
   useEffect(() => {
     try {
@@ -37,7 +38,7 @@ export default function SqlLabPage() {
 
   const fetchTableColumns = async (tableName: string) => {
     try {
-      const response = await iotApi.request(
+      const response = await getColumnsApi.request(
         `/jviz/analytics/druid/custom-list-keys?tableName=${tableName}`,
         { method: 'GET' }
       )
@@ -200,23 +201,23 @@ export default function SqlLabPage() {
     
     const dateColumns = columns.filter(col => {
       const value = sampleRow[col]
-      return value && (value.includes('T') || value.includes('-') || value.includes('/'))
+      return value && typeof value === 'string' && (value.includes('T') || value.includes('-') || value.includes('/'))
     })
     
-    // Suggest chart types based on data characteristics
+
     if (numericColumns.length === 1 && textColumns.length >= 1) {
-      return 'bar-chart' // Single metric, categorical data
+      return 'bar-chart' 
     } else if (numericColumns.length >= 2 && textColumns.length >= 1) {
-      return 'line-chart' // Multiple metrics, categorical data
+      return 'line-chart' 
     } else if (numericColumns.length === 2) {
-      return 'scatter-plot' // Two numeric variables
+      return 'scatter-plot' 
     } else if (textColumns.length >= 1 && numericColumns.length === 1) {
-      return 'pie-chart' // Categorical with single metric
+      return 'pie-chart'
     } else if (dateColumns.length >= 1 && numericColumns.length >= 1) {
-      return 'line-chart' // Time series data
+      return 'line-chart'
     }
     
-    return 'bar-chart' // Default fallback
+    return 'bar-chart'
   }
 
   const handleChartSelect = (chartType: ChartType) => {
@@ -241,7 +242,7 @@ export default function SqlLabPage() {
             {/* <Button size="icon" variant="ghost" className="text-indigo-600 dark:text-indigo-400"><List className="size-4" /></Button> */}
           </div>
           <div className="p-3 space-y-2">
-            {['light_table', 'druid-test'].map((t) => (
+            {DATASETS.map((t) => (
               <div 
                 key={t} 
                 className={`flex items-center gap-2 rounded-md px-2 py-1.5 cursor-pointer transition-colors ${
