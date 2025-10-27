@@ -41,7 +41,8 @@ import {
   Globe,
   Zap
 } from "lucide-react"
-import { CHART_TYPES, CATEGORIES, DATASETS, type ChartType } from "@/constants/chart-types"
+import { CHART_TYPES, CATEGORIES, type ChartType } from "@/constants/chart-types"
+import { DATASETS } from "@/constants/chart-creation"
 
 // Chart types and constants are now imported from @/constants/chart-types
 

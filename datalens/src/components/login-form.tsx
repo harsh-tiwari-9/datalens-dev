@@ -24,6 +24,7 @@ export function LoginForm({
 
   // Auto-trigger OTP when phone number reaches 10 digits
   useEffect(() => {
+    console.log("otp requested:::", otpRequested)
     const digitsOnly = phoneNumber.replace(/\D/g, "")
     if (digitsOnly.length !== 10 || submitting || otpRequested) {
       if (debounceRef.current) clearTimeout(debounceRef.current)
@@ -113,11 +114,13 @@ export function LoginForm({
           }
           toast.success("Logged in successfully")
           router.replace("/home")
+          toast.success("OTP verified")
+          return
+        } else {
+          toast.error("Login failed")
+          router.replace("/login")
           return
         }
-
-        toast.success("OTP verified")
-        router.replace("/home")
         return
       }
 
@@ -159,6 +162,12 @@ export function LoginForm({
     }
   }
 
+  function changePhoneNumber(e: React.ChangeEvent<HTMLInputElement>) {
+    console.log("changePhoneNumber", e.target.value)
+    setPhoneNumber(e.target.value)
+    setOtpRequested(false) // Reset OTP state when phone number changes
+  }
+
   return (
     <form className={cn("flex flex-col gap-6", className)} {...props} onSubmit={onSubmit}>
       <div className="flex flex-col items-center gap-2 text-center">
@@ -170,7 +179,7 @@ export function LoginForm({
       <div className="grid gap-6">
         <div className="grid gap-3">
           <Label htmlFor="phoneNumber">Phone Number</Label>
-          <Input id="phoneNumber" type="tel" placeholder="Enter your phone number" value={phoneNumber} onChange={(e) => setPhoneNumber(e.target.value)} required />
+          <Input id="phoneNumber" type="tel" placeholder="Enter your phone number" value={phoneNumber} onChange={changePhoneNumber} required />
         </div>
         <div className="grid gap-3">
           <div className="flex items-center"> 
@@ -183,7 +192,7 @@ export function LoginForm({
           className="w-full"
           disabled={
             submitting || !(
-              phoneNumber.replace(/\D/g, "").length === 10 && otp.trim().length > 0
+              phoneNumber.replace(/\D/g, "").length === 10 && otp.trim().length === 6
             )
           }
         >

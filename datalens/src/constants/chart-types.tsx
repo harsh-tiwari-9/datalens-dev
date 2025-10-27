@@ -174,8 +174,3 @@ export const CATEGORIES = [
   "Advanced",
   "Specialized"
 ]
-
-export const DATASETS = [
-  "light_table",
-  "druid-test"
-]

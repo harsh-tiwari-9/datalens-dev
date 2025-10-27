@@ -2,8 +2,7 @@
 
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
-import { Input } from "@/components/ui/input"
-import { Filter, SlidersHorizontal, List, Copy, Download, BarChart3 } from "lucide-react"
+import { Copy, Download, BarChart3, Eye } from "lucide-react"
 import dynamic from "next/dynamic"
 import { useEffect, useState } from "react"
 import { useIotAnalyticsApi } from "@/hooks/useApi"
@@ -26,6 +25,8 @@ export default function SqlLabPage() {
   const [results, setResults] = useState<any[]>([])
   const [resultColumns, setResultColumns] = useState<string[]>([])
   const [showChartModal, setShowChartModal] = useState(false)
+  const [selectedRowData, setSelectedRowData] = useState<any[]>([])
+  const [showRowModal, setShowRowModal] = useState(false)
   const iotApi = useIotAnalyticsApi()
   const getColumnsApi = useIotAnalyticsApi()
 
@@ -49,6 +50,8 @@ export default function SqlLabPage() {
             name: col,
           }))
           setColumns(columnsData)
+          console.log("columnsData:::", columnsData)
+          console.log("columns:::", columns)
           toast.success(`Loaded ${columnsData.length} columns from ${tableName}`)
         } else {
           setColumns([])
@@ -68,10 +71,17 @@ export default function SqlLabPage() {
   const handleTableSelect = (tableName: string) => {
     setSelectedTable(tableName)
     fetchTableColumns(tableName)
-    setQuery(`SELECT * FROM "${tableName}" LIMIT 10`)
+    setQuery(`Enter query to fetch data from "${tableName}" `)
   }
 
   const executeQuery = async () => {
+    if(query.toLowerCase().includes("select *")) {
+      toast.error("Please enter columns to query from the table.")
+      return
+    } else if(query.toLowerCase().includes("delete") || query.toLowerCase().includes("update") || query.toLowerCase().includes("insert") || query.toLowerCase().includes("alter") || query.toLowerCase().includes("drop") || query.toLowerCase().includes("create") || query.toLowerCase().includes("truncate") || query.toLowerCase().includes("rename") || query.toLowerCase().includes("grant") || query.toLowerCase().includes("revoke") || query.toLowerCase().includes("alter") || query.toLowerCase().includes("drop") || query.toLowerCase().includes("create") || query.toLowerCase().includes("truncate") || query.toLowerCase().includes("rename") || query.toLowerCase().includes("grant") || query.toLowerCase().includes("revoke")) {
+      toast.error("Following SQL commands are not supported: delete, update, insert, alter, drop, create, truncate, rename, grant, revoke.")
+      return
+    }
     try {
       const response = await iotApi.request(
         "/jviz/analytics/druid/query",
@@ -82,7 +92,7 @@ export default function SqlLabPage() {
       )
 
       if (response && typeof response === 'object') {
-        const data = (response as any)
+        const data = (response as any)  
         if (Array.isArray(data)) {
           // If response is array of rows
           setResults(data)
@@ -232,6 +242,30 @@ export default function SqlLabPage() {
     window.location.href = url
   }
 
+  function handleQueryChange(value: string) {
+    console.log("value:::", value)
+    setQuery(value)
+  }
+
+  function handleViewRow(row: any) {
+    try {
+      if (row.ext) {
+        const extData = JSON.parse(row.ext)
+        if (Array.isArray(extData)) {
+          setSelectedRowData(extData)
+          setShowRowModal(true)
+        } else {
+          toast.error("Ext data is not an array")
+        }
+      } else {
+        toast.warning("No ext data found in this row")
+      }
+    } catch (error) {
+      console.error('Error parsing ext data:', error)
+      toast.error("Failed to parse ext data")
+    }
+  }
+
   return (
     <>
       <div className="grid gap-6 md:grid-cols-[280px_1fr]">
@@ -275,6 +309,7 @@ export default function SqlLabPage() {
                   <div className="text-sm text-muted-foreground">Loading columns...</div>
                 </div>
               ) : columns.length > 0 ? (
+                console.log("columns:::", columns),
                 columns.map((col) => (
                   <div key={col.name} className="grid grid-cols-2 gap-2 rounded-md border px-2 py-1.5 text-sm">
                     <span>{col.name}</span>
@@ -315,7 +350,7 @@ export default function SqlLabPage() {
                   defaultLanguage="sql"
                   theme={theme}
                   value={query}
-                  onChange={(value) => setQuery(value || "")}
+                  onChange={(value) => handleQueryChange(value || "")}
                   options={{
                     minimap: { enabled: false },
                     fontSize: 13,
@@ -382,6 +417,7 @@ export default function SqlLabPage() {
                                 {col}
                               </th>
                             ))}
+                            <th key="action" className="px-4 py-3 font-semibold text-xs uppercase tracking-wider whitespace-nowrap border-r border-slate-200 dark:border-slate-600 last:border-r-0">Action</th>
                           </tr>
                         </thead>
                         <tbody className="divide-y divide-slate-200 dark:divide-slate-700">
@@ -394,6 +430,12 @@ export default function SqlLabPage() {
                                   </span>
                                 </td>
                               ))}
+                              <td key="action" className="px-4 py-3 whitespace-nowrap text-slate-900 dark:text-slate-100 border-r border-slate-100 dark:border-slate-700 last:border-r-0 font-mono text-xs">
+                                <Button size="sm" variant="outline" className="text-xs" onClick={() => handleViewRow(row)}>
+                                  <Eye className="size-3 mr-1" />
+                                  View
+                                </Button>
+                              </td>
                             </tr>
                           ))}
                         </tbody>
@@ -420,6 +462,41 @@ export default function SqlLabPage() {
         suggestedChartType={analyzeDataForChartType(results, resultColumns)}
         dataPreview={results.slice(0, 5)} // Show first 5 rows as preview
       />
+
+      {/* Row Data Modal */}
+      {showRowModal && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
+          <div className="bg-white dark:bg-slate-900 rounded-lg shadow-xl max-w-4xl w-full mx-4 max-h-[80vh] overflow-hidden">
+            <div className="flex items-center justify-between p-4 border-b">
+              <h3 className="text-lg font-semibold">Row Data (ext field)</h3>
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={() => setShowRowModal(false)}
+                className="text-slate-500 hover:text-slate-700"
+              >
+                ✕
+              </Button>
+            </div>
+            <div className="p-4 overflow-auto max-h-[60vh]">
+              <div className="space-y-4">
+                {selectedRowData.map((item, index) => (
+                  <Card key={index} className="border border-slate-200 dark:border-slate-700">
+                    <CardHeader className="pb-2">
+                      <CardTitle className="text-sm font-medium">JSON Object {index + 1}</CardTitle>
+                    </CardHeader>
+                    <CardContent>
+                      <pre className="text-xs bg-slate-50 dark:bg-slate-800 p-3 rounded border overflow-x-auto">
+                        {JSON.stringify(item, null, 2)}
+                      </pre>
+                    </CardContent>
+                  </Card>
+                ))}
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
     </>
   )
 }
