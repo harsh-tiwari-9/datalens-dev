@@ -3,8 +3,8 @@
 import { useState } from "react"
 import { useRouter } from "next/navigation"
 import { Card, CardContent } from "@/components/ui/card"
-import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
+import { toast } from "sonner"
 import { Badge } from "@/components/ui/badge"
 import {
   Dialog,
@@ -93,7 +93,7 @@ export default function CreateChartModal({ isOpen, onClose, onChartSelect, sugge
       // Use Next.js router for client-side navigation
       router.push(url)
     } else {
-      console.log('No dataset selected, calling onChartSelect')
+      toast.error("Please select a dataset")
       onChartSelect?.(chart)
     }
   }

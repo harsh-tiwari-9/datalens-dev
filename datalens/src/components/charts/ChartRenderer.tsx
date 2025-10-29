@@ -65,24 +65,30 @@ export const ChartRenderer: React.FC<ChartRendererProps> = ({
   // Render chart based on type
   switch (chartType.toLowerCase()) {
     case 'bar-chart':
+    case 'bar':
       return <BarChart {...commonProps} />
     
     case 'line-chart':
+    case 'line':
       return <LineChart {...commonProps} />
     
     case 'pie-chart':
+    case 'pie':
       return <PieChart {...commonProps} />
     
     case 'area-chart':
+    case 'area':
       return <AreaChart {...commonProps} />
     
     case 'scatter-plot':
+    case 'scatter':
       return <ScatterChart {...commonProps} />
     
     case 'heatmap':
       return <HeatmapChart {...commonProps} />
     
     case 'funnel-chart':
+    case 'funnel':
       return <FunnelChart {...commonProps} />
     
     case 'big-number':
@@ -92,12 +98,15 @@ export const ChartRenderer: React.FC<ChartRendererProps> = ({
       return <LineChart {...commonProps} />
     
     case 'tree-map':
+    case 'treemap':
       return <TreemapChart {...commonProps} />
     
     case 'radar-chart':
+    case 'radar':
       return <RadarChart {...commonProps} />
     
     case 'bubble-chart':
+    case 'bubble':
       return <BubbleChart {...commonProps} />
     
     case 'multi-line':

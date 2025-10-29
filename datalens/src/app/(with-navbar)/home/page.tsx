@@ -1,7 +1,111 @@
+"use client"
+
+import { useEffect, useState  } from "react"
+import { useRouter } from "next/navigation"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
+import { useIotAnalyticsApi, useOnboardingApi } from "@/hooks/useApi"
+import { DATASETS } from "@/constants/chart-creation"
 
 export default function HomePage() {
+  const router = useRouter()
+  const [dashboardData, setDashboardData] = useState<any[]>([])
+  const [dashboardCount, setDashboardCount] = useState(0)
+  const [chartsCount, setChartsCount] = useState(0)
+  const [datasetCount, setDatasetCount] = useState(0)
+  const iotApi = useIotAnalyticsApi()
+  const onboardingApi = useOnboardingApi()
+
+
+  useEffect(() => {
+    fetchDashboardData()
+    fetchChartCount()
+    fetchDatasetCount()
+  }, [])
+
+  const fetchDatasetCount = () => {
+    try {
+      console.log("DATASETS:::", DATASETS.length)
+      setDatasetCount(DATASETS.length);
+      animateCounter(DATASETS.length, 'dataset');
+    } catch (error) {
+      console.error('Error fetching datasets:', error)
+      setDatasetCount(0);
+      animateCounter(0, 'dataset');
+    }
+  }
+
+  const fetchChartCount = async () => {
+    try {
+      const response = await onboardingApi.request(
+        "/jviz/onboard/widget/druid/widget?skip=0&limit=0",
+        {
+          method: "GET"
+        }
+      )
+
+      if (response && response.data && Array.isArray(response.data)) {
+        setChartsCount(response.data.length);
+        animateCounter(response.data.length, 'chart');
+      } else {
+        setChartsCount(0);
+        animateCounter(0, 'chart');
+      }
+    } catch (error) {
+      console.error('Error fetching charts:', error)
+      setChartsCount(0);
+    }
+  }
+
+  const fetchDashboardData = async () => {
+    try {
+      const response = await iotApi.request("/jviz/analytics/druid/dashboard?skip=0&limit=0", 
+        { method: "GET" }
+      )
+
+      if(response && response.data && Array.isArray(response.data)) {
+        setDashboardData(response.data)
+        // Animate counter to actual count
+        animateCounter(response.data.length, 'dashboard')
+      } else {
+        setDashboardData([])
+        animateCounter(0, 'dashboard')
+      }
+      console.log("response:::", response)
+    } catch (error) {
+      console.error("Error fetching dashboard data:", error)
+    }
+  }
+
+  const animateCounter = (targetCount: number, cardType: string) => {
+    const duration = 800 // 0.8 seconds
+    const startTime = Date.now()
+    const startCount = dashboardCount
+
+    const updateCounter = () => {
+      const elapsed = Date.now() - startTime
+      const progress = Math.min(elapsed / duration, 1)
+      
+      // Easing function for smooth animation
+      const easeOutQuart = 1 - Math.pow(1 - progress, 4)
+      const currentCount = Math.round(startCount + (targetCount - startCount) * easeOutQuart)
+
+      if(cardType == 'dashboard') {
+        setDashboardCount(currentCount)
+      } else if(cardType == 'chart') {
+        setChartsCount(currentCount)
+      } else if(cardType == 'dataset') {
+        setDatasetCount(currentCount)
+      }
+      
+      if (progress < 1) {
+        requestAnimationFrame(updateCounter)
+      }
+    }
+    
+    requestAnimationFrame(updateCounter)
+  }
+
   return (
     <> 
       <section className="relative overflow-hidden rounded-2xl border bg-gradient-to-br from-indigo-500/10 via-transparent to-indigo-500/5 p-8 md:p-10">
@@ -32,8 +136,8 @@ export default function HomePage() {
           <CardContent>
             <div className="flex items-center justify-between">
               <div>
-                <p className="text-3xl font-bold tracking-tight">24</p>
-                <p className="text-xs text-muted-foreground">+3 this week</p>
+                <p className="text-3xl font-bold tracking-tight">{dashboardCount}</p>
+                {/* <p className="text-xs text-muted-foreground">+3 this week</p> */}
               </div>
               <div className="w-24 h-16">
                 <svg viewBox="0 0 96 64" className="w-full h-full">
@@ -68,8 +172,7 @@ export default function HomePage() {
           <CardContent>
             <div className="flex items-center justify-between">
               <div>
-                <p className="text-3xl font-bold tracking-tight">132</p>
-                <p className="text-xs text-muted-foreground">12 updated</p>
+                <p className="text-3xl font-bold tracking-tight">{chartsCount}</p>
               </div>
               <div className="w-24 h-16 flex items-end gap-1">
                 <div className="w-4 bg-gradient-to-t from-indigo-600 to-indigo-400 rounded-t h-12"></div>
@@ -91,8 +194,7 @@ export default function HomePage() {
           <CardContent>
             <div className="flex items-center justify-between">
               <div>
-                <p className="text-3xl font-bold tracking-tight">18</p>
-                <p className="text-xs text-muted-foreground">4 new connections</p>
+                <p className="text-3xl font-bold tracking-tight">{datasetCount}</p>
               </div>
               <div className="w-20 h-16">
                 <svg viewBox="0 0 80 64" className="w-full h-full">
@@ -115,8 +217,8 @@ export default function HomePage() {
           <CardContent>
             <div className="flex items-center justify-between">
               <div>
-                <p className="text-3xl font-bold tracking-tight">76</p>
-                <p className="text-xs text-muted-foreground">Saved this month</p>
+                <p className="text-3xl font-bold tracking-tight">{chartsCount}</p>
+                {/* <p className="text-xs text-muted-foreground"></p> */}
               </div>
               <div className="w-24 h-16">
                 <svg viewBox="0 0 96 64" className="w-full h-full">
@@ -150,94 +252,17 @@ export default function HomePage() {
           </CardHeader>
           <CardContent>
             <div className="grid gap-3 md:grid-cols-2">
-              {[
-                { name: "Solar", meta: "Updated 2d ago", chartType: "line" },
-                { name: "Sales Overview", meta: "Updated 5d ago", chartType: "bar" },
-                { name: "IoT Devices", meta: "Updated 1w ago", chartType: "pie" },
-                { name: "Customer 360", meta: "Updated 2w ago", chartType: "area" },
-                { name: "Ev Dashboard", meta: "Updated 8w ago", chartType: "funnel" },
-                { name: "CMP Failure Analysis", meta: "Updated 2w ago", chartType: "heatmap" },
-
-              ].map((d) => (
-                <div 
-                  key={d.name} 
+               {dashboardData.map((d) => (
+                 <div
+                  key={d.id} 
                   className="flex items-center justify-between rounded-lg border p-3 hover:bg-slate-50 dark:hover:bg-slate-800 transition-colors cursor-pointer"
-                  // onClick={() => {
-                  //   // TODO: Navigate to dashboard
-                  //   console.log(`Opening dashboard: ${d.name}`)
-                  // }}
+                  onClick={() => {
+                    router.push(`/dashboard/${d.id}`)
+                  }}
                 >
-                  <div className="flex items-center gap-3 justify-between w-full">
-                    <div>
+                  <div>
                       <p className="font-medium">{d.name}</p>
-                      <p className="text-xs text-muted-foreground">{d.meta}</p>
                     </div>
-                    {/* Random Chart Preview */}
-                    <div className="w-12 h-8 opacity-60">
-                      {d.chartType === "line" && (
-                        <svg viewBox="0 0 48 32" className="w-full h-full">
-                          <path d="M4,24 Q12,16 20,20 T36,8 T44,4" fill="none" stroke="#6366f1" strokeWidth="2"/>
-                        </svg>
-                      )}
-                      {d.chartType === "bar" && (
-                        <div className="flex items-end gap-1 h-full">
-                          <div className="w-2 bg-indigo-500 rounded-t h-6"></div>
-                          <div className="w-2 bg-indigo-500 rounded-t h-4"></div>
-                          <div className="w-2 bg-indigo-500 rounded-t h-8"></div>
-                          <div className="w-2 bg-indigo-500 rounded-t h-3"></div>
-                        </div>
-                      )}
-                      {d.chartType === "pie" && (
-                        <svg viewBox="0 0 32 32" className="w-full h-full">
-                          <circle cx="16" cy="16" r="12" fill="#e5e7eb"/>
-                          <path d="M16 4 A12 12 0 0 1 28 16 L16 16 Z" fill="#6366f1"/>
-                          <path d="M28 16 A12 12 0 0 1 16 28 L16 16 Z" fill="#8b5cf6"/>
-                        </svg>
-                      )}
-                      {d.chartType === "area" && (
-                        <svg viewBox="0 0 48 32" className="w-full h-full">
-                          <defs>
-                            <linearGradient id={`areaGradient-${d.name}`} x1="0%" y1="0%" x2="0%" y2="100%">
-                              <stop offset="0%" stopColor="#6366f1" stopOpacity="0.3"/>
-                              <stop offset="100%" stopColor="#6366f1" stopOpacity="0"/>
-                            </linearGradient>
-                          </defs>
-                          <path d="M4,24 L12,20 L20,16 L28,12 L36,8 L44,4 L44,32 L4,32 Z" fill={`url(#areaGradient-${d.name})`}/>
-                          <path d="M4,24 L12,20 L20,16 L28,12 L36,8 L44,4" fill="none" stroke="#6366f1" strokeWidth="1.5"/>
-                        </svg>
-                      )}
-                      {d.chartType === "funnel" && (
-                        <svg viewBox="0 0 48 32" className="w-full h-full">
-                          <path d="M8,4 L40,4 L36,12 L12,12 Z" fill="#6366f1" opacity="0.8"/>
-                          <path d="M12,12 L36,12 L32,20 L16,20 Z" fill="#6366f1" opacity="0.6"/>
-                          <path d="M16,20 L32,20 L28,28 L20,28 Z" fill="#6366f1" opacity="0.4"/>
-                        </svg>
-                      )}
-                      {d.chartType === "heatmap" && (
-                        <svg viewBox="0 0 48 32" className="w-full h-full">
-                          <defs>
-                            <linearGradient id={`heatmapGradient-${d.name}`} x1="0%" y1="0%" x2="100%" y2="100%">
-                              <stop offset="0%" stopColor="#6366f1" stopOpacity="0.2"/>
-                              <stop offset="50%" stopColor="#6366f1" stopOpacity="0.6"/>
-                              <stop offset="100%" stopColor="#6366f1" stopOpacity="0.9"/>
-                            </linearGradient>
-                          </defs>
-                          <rect x="4" y="4" width="8" height="6" fill="#6366f1" opacity="0.3"/>
-                          <rect x="14" y="4" width="8" height="6" fill="#6366f1" opacity="0.6"/>
-                          <rect x="24" y="4" width="8" height="6" fill="#6366f1" opacity="0.8"/>
-                          <rect x="34" y="4" width="8" height="6" fill="#6366f1" opacity="0.9"/>
-                          <rect x="4" y="12" width="8" height="6" fill="#6366f1" opacity="0.4"/>
-                          <rect x="14" y="12" width="8" height="6" fill="#6366f1" opacity="0.7"/>
-                          <rect x="24" y="12" width="8" height="6" fill="#6366f1" opacity="0.9"/>
-                          <rect x="34" y="12" width="8" height="6" fill="#6366f1" opacity="1"/>
-                          <rect x="4" y="20" width="8" height="6" fill="#6366f1" opacity="0.5"/>
-                          <rect x="14" y="20" width="8" height="6" fill="#6366f1" opacity="0.8"/>
-                          <rect x="24" y="20" width="8" height="6" fill="#6366f1" opacity="0.9"/>
-                          <rect x="34" y="20" width="8" height="6" fill="#6366f1" opacity="1"/>
-                        </svg>
-                      )}
-                    </div>
-                  </div>
                 </div>
               ))}
             </div>

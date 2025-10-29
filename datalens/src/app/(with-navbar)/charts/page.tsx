@@ -10,9 +10,6 @@ import { Badge } from "@/components/ui/badge"
 import { 
   Search, 
   Filter, 
-  Grid3X3, 
-  List, 
-  Star, 
   MoreHorizontal, 
   Download,
   Plus,
@@ -36,12 +33,6 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select"
-import { Calendar } from "@/components/ui/calendar"
-import {
-  Popover,
-  PopoverContent,
-  PopoverTrigger,
-} from "@/components/ui/popover"
 import { format } from "date-fns"
 import CreateChartModal from "@/components/create-chart-modal"
 
