@@ -6,6 +6,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { useIotAnalyticsApi, useOnboardingApi } from "@/hooks/useApi"
 import { DATASETS } from "@/constants/chart-creation"
+import { animateCounter } from "@/lib/animation-utils"
 
 export default function HomePage() {
   const router = useRouter()
@@ -27,11 +28,15 @@ export default function HomePage() {
     try {
       console.log("DATASETS:::", DATASETS.length)
       setDatasetCount(DATASETS.length);
-      animateCounter(DATASETS.length, 'dataset');
+      animateCounter(datasetCount, DATASETS.length, {
+        onUpdate: (currentCount) => setDatasetCount(currentCount)
+      });
     } catch (error) {
       console.error('Error fetching datasets:', error)
       setDatasetCount(0);
-      animateCounter(0, 'dataset');
+      animateCounter(datasetCount, 0, {
+        onUpdate: (currentCount) => setDatasetCount(currentCount)
+      });
     }
   }
 
@@ -46,10 +51,14 @@ export default function HomePage() {
 
       if (response && response.data && Array.isArray(response.data)) {
         setChartsCount(response.data.length);
-        animateCounter(response.data.length, 'chart');
+        animateCounter(chartsCount, response.data.length, {
+          onUpdate: (currentCount) => setChartsCount(currentCount)
+        });
       } else {
         setChartsCount(0);
-        animateCounter(0, 'chart');
+        animateCounter(chartsCount, 0, {
+          onUpdate: (currentCount) => setChartsCount(currentCount)
+        });
       }
     } catch (error) {
       console.error('Error fetching charts:', error)
@@ -66,10 +75,14 @@ export default function HomePage() {
       if(response && response.data && Array.isArray(response.data)) {
         setDashboardData(response.data)
         // Animate counter to actual count
-        animateCounter(response.data.length, 'dashboard')
+        animateCounter(dashboardCount, response.data.length, {
+          onUpdate: (currentCount) => setDashboardCount(currentCount)
+        });
       } else {
         setDashboardData([])
-        animateCounter(0, 'dashboard')
+        animateCounter(dashboardCount, 0, {
+          onUpdate: (currentCount) => setDashboardCount(currentCount)
+        });
       }
       console.log("response:::", response)
     } catch (error) {
@@ -77,34 +90,6 @@ export default function HomePage() {
     }
   }
 
-  const animateCounter = (targetCount: number, cardType: string) => {
-    const duration = 800 // 0.8 seconds
-    const startTime = Date.now()
-    const startCount = dashboardCount
-
-    const updateCounter = () => {
-      const elapsed = Date.now() - startTime
-      const progress = Math.min(elapsed / duration, 1)
-      
-      // Easing function for smooth animation
-      const easeOutQuart = 1 - Math.pow(1 - progress, 4)
-      const currentCount = Math.round(startCount + (targetCount - startCount) * easeOutQuart)
-
-      if(cardType == 'dashboard') {
-        setDashboardCount(currentCount)
-      } else if(cardType == 'chart') {
-        setChartsCount(currentCount)
-      } else if(cardType == 'dataset') {
-        setDatasetCount(currentCount)
-      }
-      
-      if (progress < 1) {
-        requestAnimationFrame(updateCounter)
-      }
-    }
-    
-    requestAnimationFrame(updateCounter)
-  }
 
   return (
     <> 

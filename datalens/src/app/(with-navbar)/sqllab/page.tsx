@@ -1,6 +1,6 @@
 "use client"
 
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
+import { Card, CardContent, CardFooter, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Copy, Download, BarChart3, Eye } from "lucide-react"
 import dynamic from "next/dynamic"
@@ -21,7 +21,7 @@ export default function SqlLabPage() {
   const [theme, setTheme] = useState<"vs" | "vs-dark">("vs")
   const [selectedTable, setSelectedTable] = useState<string | null>(null)
   const [columns, setColumns] = useState<Column[]>([])
-  const [query, setQuery] = useState("");
+  let [query, setQuery] = useState("");
   const [results, setResults] = useState<any[]>([])
   const [resultColumns, setResultColumns] = useState<string[]>([])
   const [showChartModal, setShowChartModal] = useState(false)
@@ -29,7 +29,8 @@ export default function SqlLabPage() {
   const [showRowModal, setShowRowModal] = useState(false)
   const iotApi = useIotAnalyticsApi()
   const getColumnsApi = useIotAnalyticsApi()
-
+  const [limit, setLimit] = useState(1000)
+  const [offset, setOffset] = useState(0)
   useEffect(() => {
     try {
       const isDark = document.documentElement.classList.contains("dark")
@@ -52,34 +53,34 @@ export default function SqlLabPage() {
           setColumns(columnsData)
           console.log("columnsData:::", columnsData)
           console.log("columns:::", columns)
-          toast.success(`Loaded ${columnsData.length} columns from ${tableName}`)
+          toast.success(`Loaded ${columnsData.length} columns from ${tableName}`, {duration: Infinity})
         } else {
           setColumns([])
-          toast.warning('No columns found for this table')
+          toast.warning('No columns found for this table', {duration: Infinity})
         }
       } else {
         setColumns([])
-        toast.error('Invalid response format')
+        toast.error('Invalid response format', {duration: Infinity})
       }
     } catch (error) {
       console.error('Error fetching table columns:', error)
       setColumns([])
-      toast.error('Failed to fetch table columns')
+      toast.error('Failed to fetch table columns', {duration: Infinity})
     }
   }
 
   const handleTableSelect = (tableName: string) => {
     setSelectedTable(tableName)
     fetchTableColumns(tableName)
-    setQuery(`Enter query to fetch data from "${tableName}" `)
+    toast.success(`Enter query to fetch data from "${tableName}" `, {duration: Infinity})
   }
 
   const executeQuery = async () => {
     if(query.toLowerCase().includes("select *")) {
-      toast.error("Please enter columns to query from the table.")
+      toast.error("Please enter columns to query from the table.", {duration: Infinity})
       return
     } else if(query.toLowerCase().includes("delete") || query.toLowerCase().includes("update") || query.toLowerCase().includes("insert") || query.toLowerCase().includes("alter") || query.toLowerCase().includes("drop") || query.toLowerCase().includes("create") || query.toLowerCase().includes("truncate") || query.toLowerCase().includes("rename") || query.toLowerCase().includes("grant") || query.toLowerCase().includes("revoke") || query.toLowerCase().includes("alter") || query.toLowerCase().includes("drop") || query.toLowerCase().includes("create") || query.toLowerCase().includes("truncate") || query.toLowerCase().includes("rename") || query.toLowerCase().includes("grant") || query.toLowerCase().includes("revoke")) {
-      toast.error("Following SQL commands are not supported: delete, update, insert, alter, drop, create, truncate, rename, grant, revoke.")
+      toast.error("Following SQL commands are not supported: delete, update, insert, alter, drop, create, truncate, rename, grant, revoke.", {duration: Infinity})
       return
     }
     try {
@@ -101,7 +102,7 @@ export default function SqlLabPage() {
           } else {
             setResultColumns([])
           }
-          toast.success(`Query executed successfully. ${data.length} rows returned.`)
+          toast.success(`Query executed successfully. ${data.length} rows returned.`, {duration: Infinity})
         } else if (data?.data && Array.isArray(data.data)) {
           // If response has data property
           setResults(data.data)
@@ -110,22 +111,21 @@ export default function SqlLabPage() {
           } else {
             setResultColumns([])
           }
-          toast.success(`Query executed successfully. ${data.data.length} rows returned.`)
+          toast.success(`Query executed successfully. ${data.data.length} rows returned.`, {duration: Infinity})
         } else {
           setResults([])
           setResultColumns([])
-          toast.warning("No data returned from query")
+          toast.warning("No data returned from query", {duration: Infinity})
         }
       } else {
         setResults([])
         setResultColumns([])
-        toast.error("Invalid response format")
+        toast.error("Invalid response format", {duration: Infinity})
       }
     } catch (error) {
-      console.error('Error executing query:', error)
       setResults([])
       setResultColumns([])
-      toast.error("Failed to execute query")
+      toast.error("Failed to execute query", {duration: Infinity})
     }
   }
 
@@ -146,9 +146,9 @@ export default function SqlLabPage() {
       ].join('\n')
       
       await navigator.clipboard.writeText(csvContent)
-      toast.success("Data copied to clipboard!")
+      toast.success("Data copied to clipboard!", {duration: Infinity})
     } catch (error) {
-      toast.error("Failed to copy to clipboard")
+      toast.error("Failed to copy to clipboard", {duration: Infinity})
     }
   }
 
@@ -156,7 +156,7 @@ export default function SqlLabPage() {
     if (results.length === 0) return
 
     if(results.length > 10000) {
-      toast.error("Only 10,000 rows can be downloaded at a time.")
+      toast.error("Only 10,000 rows can be downloaded at a time.", {duration: Infinity})
       return
     }
     
@@ -183,9 +183,9 @@ export default function SqlLabPage() {
       document.body.removeChild(a)
       window.URL.revokeObjectURL(url)
       
-      toast.success("Data downloaded successfully!")
+      toast.success("Data downloaded successfully!", {duration: Infinity})
     } catch (error) {
-      toast.error("Failed to download data")
+      toast.error("Failed to download data", {duration: Infinity})
     }
   }
 
@@ -255,10 +255,10 @@ export default function SqlLabPage() {
           setSelectedRowData(extData)
           setShowRowModal(true)
         } else {
-          toast.error("Ext data is not an array")
+          toast.error("Ext data is not an array", {duration: Infinity})
         }
       } else {
-        toast.warning("No ext data found in this row")
+        toast.warning("No json data found in this row", {duration: Infinity})
       }
     } catch (error) {
       console.error('Error parsing ext data:', error)
@@ -499,6 +499,4 @@ export default function SqlLabPage() {
       )}
     </>
   )
-}
-
-
+  }
